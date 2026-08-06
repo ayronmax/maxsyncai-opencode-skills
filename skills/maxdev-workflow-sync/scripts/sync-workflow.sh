@@ -189,7 +189,12 @@ declare -a VERSIONED_TEMPLATES=(
 # o trecho entre markers — entries custom acima/abaixo são preservadas.
 GITIGNORE_BEGIN="# >>> maxdev-workflow-sync >>>"
 GITIGNORE_END="# <<< maxdev-workflow-sync <<<"
-GITIGNORE_TEMPLATE="$ASSETS/.gitignore"
+# Arquivo-template vive em assets/gitignore.template (sem dot) — npm/packaging
+# blacklist default sempre omite '.gitignore' mesmo com 'files: ["skills", ...]'
+# no package.json. Renomear para 'gitignore.template' escapa da blacklist.
+# EXTERNAL_OVERRIDES aceita 'gitignore.template' (preferido) ou '.gitignore'
+# (back-compat — dir local sem filtro npm pode ter qualquer nome).
+GITIGNORE_TEMPLATE="$ASSETS/gitignore.template"
 
 # ---------- B2 analyze_gitignore_state() ----------
 # Read-only: classifica estado do .gitignore sem tocar arquivos. Usada tanto
@@ -204,17 +209,33 @@ GITIGNORE_TEMPLATE="$ASSETS/.gitignore"
 #   skip-notpl : template não encontrado em assets/ override
 #   skip-empty  : template não tem markers delimitados (skill corrompida?)
 
+# resolve_gitignore_template: retorna path do template efetivo (override > default).
+# Override aceita 'gitignore.template' (preferido) ou '.gitignore' (back-compat).
+# Echo no stdout: path absoluto do template, ou string vazia se não encontrado.
+resolve_gitignore_template() {
+  if [[ -n "$EXTERNAL_OVERRIDES" ]]; then
+    if [[ -f "$EXTERNAL_OVERRIDES/gitignore.template" ]]; then
+      echo "$EXTERNAL_OVERRIDES/gitignore.template"; return
+    fi
+    if [[ -f "$EXTERNAL_OVERRIDES/.gitignore" ]]; then
+      echo "$EXTERNAL_OVERRIDES/.gitignore"; return
+    fi
+  fi
+  if [[ -f "$GITIGNORE_TEMPLATE" ]]; then
+    echo "$GITIGNORE_TEMPLATE"; return
+  fi
+  echo ""
+}
+
 analyze_gitignore_state() {
   local dst="$PROJECT_ROOT/.gitignore"
-  local src="$GITIGNORE_TEMPLATE"
-  if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/.gitignore" ]]; then
-    src="$EXTERNAL_OVERRIDES/.gitignore"
-  fi
+  local src
+  src=$(resolve_gitignore_template)
 
   if [[ "$OPT_GITIGNORE_SYNC" != "true" ]]; then
     echo "skip-noopt"; return
   fi
-  if [[ ! -f "$src" ]]; then
+  if [[ -z "$src" ]]; then
     echo "skip-notpl"; return
   fi
 
@@ -339,7 +360,11 @@ done
 
 GITIGNORE_DRIFT=""
 GITWARNING=""
-if [[ -f "$ASSETS/.gitignore" ]]; then
+# Resolve template efetivo (assets ou EXTERNAL_OVERRIDES) — se não há template,
+# skip case `skip-notpl` será retornado por analyze (sem efeito colateral em
+# --check). O guard evita chamar analyze se claramente não há template.
+_gtemplate=$(resolve_gitignore_template)
+if [[ -n "$_gtemplate" ]]; then
   _gstate=$(analyze_gitignore_state)
   case "$_gstate" in
     add)      GITIGNORE_DRIFT="ADD-G .gitignore  (markers + entries; novo)" ;;
@@ -530,10 +555,8 @@ fi
 
 sync_gitignore_delimited() {
   local dst="$PROJECT_ROOT/.gitignore"
-  local src="$GITIGNORE_TEMPLATE"
-  if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/.gitignore" ]]; then
-    src="$EXTERNAL_OVERRIDES/.gitignore"
-  fi
+  local src
+  src=$(resolve_gitignore_template)
 
   local state
   state=$(analyze_gitignore_state)
@@ -543,7 +566,10 @@ sync_gitignore_delimited() {
       advisory "B2 .gitignore sync: skipada por --no-gitignore-sync"
       return ;;
     skip-notpl)
-      advisory "B2 .gitignore: template não encontrado em $src"
+      advisory "B2 .gitignore: template não encontrado (esperado em assets/gitignore.template)."
+      advisory "  Causa comum: packing npm omite '.gitignore' por default. Skill usa"
+      advisory "  'gitignore.template' (sem dot) p/ evitar isso. Se atualizou da cache,"
+      advisory "  force re-fetch do package: rm -rf ~/.cache/opencode/packages/maxsyncai*"
       return ;;
     skip-empty)
       warn "B2 .gitignore: template sem markers delimitados — skipada (preserva custom)"
