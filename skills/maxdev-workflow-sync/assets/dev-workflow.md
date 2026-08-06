@@ -586,10 +586,23 @@ source ~/.bashrc
   hooks em `.git/hooks/*` — esses são **regenerados pela ferramenta `pre-commit`
   a partir do `.pre-commit-config.yaml`** (não versionar: caminhos hardcoded da
   máquina).
-- Day-0: `pre-commit install --hook-type pre-commit --hook-type pre-push`
+- Em `--apply` a skill **auto-instala** hooks se `pre-commit` existir. Skipa
+  automaticamente em CI, ambientes com hook manager alternativo (`.husky/`,
+  `lefthook.yml`, `.simple-git-hooks`), ou sem `.git/`. Force com `--install-hooks`.
+- Day-0 manual: `pre-commit install --hook-type pre-commit --hook-type pre-push`
   regenera os 2 hooks usados pelo workflow (`block-main` em pre-commit,
   `block-main-push` em pre-push).
 - Confirme com `pre-commit run --all-files` (deve executar hooks declarados).
+
+### `.gitignore` desatualizado
+
+- A skill sincroniza `.gitignore` com uma seção delimitada entre markers
+  `# >>> maxdev-workflow-sync >>>` / `# <<< maxdev-workflow-sync <<<`.
+- O re-sync substitui **só o bloco entre markers** — entries custom
+  acima/abaixo são preservadas.
+- Se markers aparecerem desbalanceados (begin sem end ou vice-versa),
+  o sync aborta a atualização do `.gitignore` com warning — remova
+  manualmente os markers restantes e rode novamente.
 
 ### Push-safe demora muito
 

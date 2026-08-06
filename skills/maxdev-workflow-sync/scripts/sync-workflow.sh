@@ -9,9 +9,19 @@
 #   ./sync-workflow.sh --check        # drift check (não modifica, só reporta)
 #   ./sync-workflow.sh --force        # sobrescreve mesmo se versão igual
 #
+# Flags opt-out (pipeline pós-apply, todas default ON — ver "Pipeline pós-apply"):
+#   --no-install-hooks               # skip auto-install de hooks pre-commit
+#   --install-hooks                  # força install mesmo se guards skipariam
+#   --no-validate                    # skip openspec validate + doctor
+#   --no-tools-check                 # skip sanity check de tooling
+#   --no-stack-suggest               # skip heurística advisory de stack
+#   --no-gitignore-sync              # skip sync delimitado de .gitignore
+#   --no-auto-opencode               # skip criação de opencode.json em bootstrap
+#   --no-derivable-placeholders      # skip substituição de {{PROJECT_NAME}}/{{PROJECT_ABSOLUTE_PATH}}
+#
 # Override local (opt-in, avançado):
 #   EXTERNAL_OVERRIDES=/path/para/dir-local ./sync-workflow.sh --apply
-#   (dir local com 7 canônicos + opcional workflow.version)
+#   (dir local com arquivos canônicos + starters + opcional workflow.version)
 #   Útil para: fork privado do template, ambientes air-gapped, testes locais.
 #   Default: nada externo — skill é self-contained em assets/.
 #
@@ -34,6 +44,44 @@ ASSETS="$SKILL_DIR/assets"
 
 step() { echo -e "\n[$1] $2"; }
 abort() { echo "✗ $*"; exit 1; }
+warn() { echo "  ⚠ $*"; }
+advisory() { echo "  ℹ $*"; }
+
+# slugify: converte string para slug compatível com Basic Memory project name
+# (lowercase, [a-z0-9-], sem espaços/accentos/pontuação).
+slugify() {
+  local raw="$1"
+  echo "$raw" \
+    | tr '[:upper:]' '[:lower:]' \
+    | iconv -t 'ascii//translit' 2>/dev/null || echo "$raw" | tr '[:upper:]' '[:lower:]'
+  # fallback se iconv falhar (translit acima pode inserir aspas — sanitize)
+}
+# versão robusta sem iconv (portável):
+slugify_name() {
+  local raw="$1"
+  echo "$raw" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9.-]+/-/g; s/^-+//; s/-+$//'
+}
+
+# is_ci: detecta ambiente CI (true se CI=true, GITHUB_ACTIONS, GITLAB_CI, etc).
+is_ci() {
+  [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" || -n "${GITLAB_CI:-}" \
+     || -n "${CIRCLECI:-}" || -n "${JENKINS_URL:-}" || -n "${BUILDKITE:-}" \
+     || -n "${DRONE:-}" || -n "${TF_BUILD:-}" ]]
+}
+
+# has_git_dir: verifica .git/ no PROJECT_ROOT.
+has_git_dir() { [[ -d "$PROJECT_ROOT/.git" ]]; }
+
+# detect_alt_hook_manager: true se detecta husky/lefthook/simple-git-hooks.
+detect_alt_hook_manager() {
+  [[ -d "$PROJECT_ROOT/.husky" ]] \
+    || [[ -f "$PROJECT_ROOT/lefthook.yml" ]] \
+    || [[ -f "$PROJECT_ROOT/lefthook.yaml" ]] \
+    || [[ -f "$PROJECT_ROOT/.simple-git-hooks" ]] \
+    || grep -q "simple-git-hooks" "$PROJECT_ROOT/package.json" 2>/dev/null
+}
 
 # ---------- override local (opt-in, env var) ----------
 # Resolvido EXPLICITAMENTE pelo usuário (path para diretório local).
@@ -63,12 +111,40 @@ fi
 PROJECT_ROOT="${PROJECT_ROOT:-$(pwd)}"
 OPENSPEC_CONFIG="$PROJECT_ROOT/openspec/config.yaml"
 
-# ---------- modos ----------
+# ---------- parser de modos + flags ----------
 
 MODE="dry-run"
-[[ "$1" == "--apply" ]] && MODE="apply"
-[[ "$1" == "--check" ]] && MODE="check"
-[[ "$1" == "--force" ]] && MODE="force"
+# Flags opt-out do pipeline pós-apply (todas default ON — zero friction):
+OPT_INSTALL_HOOKS=true          # auto-install pre-commit hooks
+OPT_INSTALL_HOOKS_FORCE=false   # força install mesmo se guards skipariam (--install-hooks)
+OPT_VALIDATE=true              # openspec validate + doctor
+OPT_TOOLS_CHECK=true            # sanity check tooling
+OPT_STACK_SUGGEST=true          # heurística advisory de stack
+OPT_GITIGNORE_SYNC=true         # sync delimitado de .gitignore
+OPT_AUTO_OPENCODE=true          # criar opencode.json em bootstrap
+OPT_DERIVABLE_PLACEHOLDERS=true # substituir {{PROJECT_NAME}}/{{PROJECT_ABSOLUTE_PATH}}
+
+for arg in "$@"; do
+  case "$arg" in
+    --apply)      MODE="apply" ;;
+    --check)      MODE="check" ;;
+    --force)      MODE="force" ;;
+    --no-install-hooks)            OPT_INSTALL_HOOKS=false ;;
+    --install-hooks)               OPT_INSTALL_HOOKS=true; OPT_INSTALL_HOOKS_FORCE=true ;;
+    --no-validate)                 OPT_VALIDATE=false ;;
+    --no-tools-check)              OPT_TOOLS_CHECK=false ;;
+    --no-stack-suggest)            OPT_STACK_SUGGEST=false ;;
+    --no-gitignore-sync)           OPT_GITIGNORE_SYNC=false ;;
+    --no-auto-opencode)            OPT_AUTO_OPENCODE=false ;;
+    --no-derivable-placeholders)   OPT_DERIVABLE_PLACEHOLDERS=false ;;
+    --help|-h)
+      sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *)
+      abort "flag desconhecida: $arg (use --help)"
+      ;;
+  esac
+done
 
 # ---------- arquivos canônicos (caminho → origem skill) ----------
 # Canônicos: clobber em --apply / --force (comportamento padrão). Formam o
@@ -93,7 +169,27 @@ declare -A STARTERS=(
   ["opencode.example.json"]="$ASSETS/opencode.example.json"
   ["TESTING.md"]="$ASSETS/TESTING.md"
   ["Makefile.example"]="$ASSETS/Makefile.example"
+  [".editorconfig"]="$ASSETS/.editorconfig"
+  ["README.md"]="$ASSETS/README.md"
 )
+
+# Arquivos canônicos + starters que carregam {{WORKFLOW_VERSION}} no cabeçalho
+# (substituído pós-copy se ainda presente — sed no-op se já substituído).
+declare -a VERSIONED_TEMPLATES=(
+  "AGENTS.md"
+  ".pre-commit-config.yaml"
+  "opencode.example.json"
+  "TESTING.md"
+  "Makefile.example"
+  ".editorconfig"
+  "README.md"
+)
+
+# Markers delimitadores do bloco .gitignore (v1.2.0+). Re-sync substitui só
+# o trecho entre markers — entries custom acima/abaixo são preservadas.
+GITIGNORE_BEGIN="# >>> maxdev-workflow-sync >>>"
+GITIGNORE_END="# <<< maxdev-workflow-sync <<<"
+GITIGNORE_TEMPLATE="$ASSETS/.gitignore"
 
 # ---------- detecta estado ----------
 
@@ -276,15 +372,11 @@ fi
 
 # ---------- substitui {{WORKFLOW_VERSION}} em arquivos copiados ----------
 
-# O template assets/AGENTS.md carrega placeholder {{WORKFLOW_VERSION}} (linha 3,
-# comentário "Template gerado por maxdev-workflow-sync v{{WORKFLOW_VERSION}}.").
+# Templates (canônicos + starters) carregam {{WORKFLOW_VERSION}} no cabeçalho.
 # Substituir no destino após cada apply (bootstrap ou drift update). Seguro:
 # sed no-op se o placeholder não existir (usuário já substituiu manualmente).
-# Os starters (pre-commit-config.yaml, opencode.example.json, TESTING.md,
-# Makefile.example) também carregam {{WORKFLOW_VERSION}} nos cabeçalhos.
 
-for f in "AGENTS.md" ".pre-commit-config.yaml" "opencode.example.json" \
-         "TESTING.md" "Makefile.example"; do
+for f in "${VERSIONED_TEMPLATES[@]}"; do
   full="$PROJECT_ROOT/$f"
   if [[ -f "$full" ]] && grep -q -F '{{WORKFLOW_VERSION}}' "$full"; then
     sed -i "s|{{WORKFLOW_VERSION}}|$WORKFLOW_VERSION|g" "$full"
@@ -292,24 +384,369 @@ for f in "AGENTS.md" ".pre-commit-config.yaml" "opencode.example.json" \
   fi
 done
 
-# ---------- pós-sync checklist ----------
+# ---------- A2 — substituir placeholders deriváveis ----------
+# {{PROJECT_NAME}}          = slug do basename do PROJECT_ROOT
+# {{PROJECT_ABSOLUTE_PATH}} = $PROJECT_ROOT
+# Determinísticos, deduzíveis do cwd — substituir pós-copy reduz friction.
+
+AUTO_PROJECT_NAME=""
+AUTO_OPENCODE_CREATED=false
+
+if [[ "$OPT_DERIVABLE_PLACEHOLDERS" == "true" ]]; then
+  AUTO_PROJECT_NAME=$(slugify_name "$(basename "$PROJECT_ROOT")")
+  AUTO_PROJECT_PATH="$PROJECT_ROOT"
+  step "A2" "Substituindo placeholders deriváveis..."
+  echo "  ℹ {{PROJECT_NAME}} → $AUTO_PROJECT_NAME"
+  echo "  ℹ {{PROJECT_ABSOLUTE_PATH}} → $AUTO_PROJECT_PATH"
+  for f in "${VERSIONED_TEMPLATES[@]}" "openspec/config.yaml" "AGENTS.md"; do
+    full="$PROJECT_ROOT/$f"
+    [[ -f "$full" ]] || continue
+    if grep -q -F '{{PROJECT_NAME}}' "$full"; then
+      sed -i "s|{{PROJECT_NAME}}|$AUTO_PROJECT_NAME|g" "$full"
+      echo "  ✓ $f: {{PROJECT_NAME}} → $AUTO_PROJECT_NAME"
+    fi
+    if grep -q -F '{{PROJECT_ABSOLUTE_PATH}}' "$full"; then
+      sed -i "s|{{PROJECT_ABSOLUTE_PATH}}|$AUTO_PROJECT_PATH|g" "$full"
+      echo "  ✓ $f: {{PROJECT_ABSOLUTE_PATH}} → $AUTO_PROJECT_PATH"
+    fi
+  done
+fi
+
+# ---------- B2 — sync delimitado de .gitignore ----------
+
+sync_gitignore_delimited() {
+  local dst="$PROJECT_ROOT/.gitignore"
+  local src="$GITIGNORE_TEMPLATE"
+
+  # Override por EXTERNAL_OVERRIDES se setado e o arquivo existir lá
+  if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/.gitignore" ]]; then
+    src="$EXTERNAL_OVERRIDES/.gitignore"
+  fi
+
+  if [[ "$OPT_GITIGNORE_SYNC" != "true" ]]; then
+    advisory "B2 .gitignore sync: skipada por --no-gitignore-sync"
+    return
+  fi
+
+  if [[ ! -f "$src" ]]; then
+    advisory "B2 .gitignore: template não encontrado em $src"
+    return
+  fi
+
+  # Caso 1: .gitignore inexistente → cria com a seção delimitada do template
+  if [[ ! -f "$dst" ]]; then
+    cp "$src" "$dst"
+    echo "  ✓ .gitignore criado com seção delimitada (markers)"
+    return
+  fi
+
+  # Lê o template (bloco entre markers) — extrai só a seção delimitada
+  local template_section
+  template_section=$(awk "/^${GITIGNORE_BEGIN//\//\\/}/,/^${GITIGNORE_END//\//\\/}/" "$src")
+  if [[ -z "$template_section" ]]; then
+    warn "B2 .gitignore: template sem markers delimitados — skipada (preserva custom)"
+    return
+  fi
+
+  # Substitui {{WORKFLOW_VERSION}} na seção do template antes de merge
+  template_section="${template_section//\{\{WORKFLOW_VERSION\}\}/$WORKFLOW_VERSION}"
+
+  # Caso 2: .gitignore existente sem markers → append da seção delimitada
+  if ! grep -q -F "$GITIGNORE_BEGIN" "$dst"; then
+    {
+      echo ""
+      echo "$template_section"
+    } >> "$dst"
+    echo "  ✓ .gitignore: seção delimitada appended (entries custom preservadas acima)"
+    return
+  fi
+
+  # Caso 3: .gitignore existente com markers — validação par (begin ↔ end)
+  local count_begin count_end
+  count_begin=$(grep -c -F "$GITIGNORE_BEGIN" "$dst" || true)
+  count_end=$(grep -c -F "$GITIGNORE_END" "$dst" || true)
+  if [[ "$count_begin" -ne "$count_end" ]]; then
+    warn "B2 .gitignore: markers desbalanceados (begin=$count_begin end=$count_end) — skipada para evitar corrupção"
+    warn "    remova manualmente os markers restantes e rode novamente"
+    return
+  fi
+
+  # Substitui só o bloco entre markers (preserva acima/abaixo)
+  # Estratégia: awk divide em before/between/after; recompõe com novo bloco.
+  local tmp
+  tmp=$(mktemp)
+  awk -v begin="$GITIGNORE_BEGIN" -v end="$GITIGNORE_END" \
+      -v new="$template_section" '
+    BEGIN {state="before"; printed_new=0}
+    $0 == begin && state=="before" {
+      state="inside"; next
+    }
+    $0 == end && state=="inside" {
+      if (!printed_new) { print new; printed_new=1 }
+      state="after"; next
+    }
+    state=="inside" { next }  # descarta antigo conteúdo
+    { print }
+    END {
+      if (!printed_new && state!="inside") print new
+    }
+  ' "$dst" > "$tmp"
+
+  if [[ -s "$tmp" ]]; then
+    mv "$tmp" "$dst"
+    echo "  ✓ .gitignore: bloco entre markers atualizado (entries custom preservadas)"
+  else
+    rm -f "$tmp"
+    warn "B2 .gitignore: awk resultou vazio — rollback preservou o original"
+  fi
+}
+
+# ---------- A3 — criar opencode.json em bootstrap ----------
+
+maybe_create_opencode_json() {
+  if [[ "$OPT_AUTO_OPENCODE" != "true" ]]; then
+    advisory "A3 opencode.json: skipada por --no-auto-opencode (renomeie .example manualmente)"
+    return
+  fi
+
+  local example="$PROJECT_ROOT/opencode.example.json"
+  local real="$PROJECT_ROOT/opencode.json"
+
+  if [[ ! -f "$example" ]]; then
+    return  # starter não foi copiado (preservado de versão antiga, etc)
+  fi
+
+  if [[ -f "$real" ]]; then
+    advisory "A3 opencode.json: já existe — .example mantido ao lado para referência"
+    return
+  fi
+
+  # .example existe, real não — renomeia (placeholders já substituídos por A2)
+  cp "$example" "$real"
+  echo "  ✓ opencode.json criado (renomeado de .example com placeholders substituídos)"
+  AUTO_OPENCODE_CREATED=true
+}
+
+# ---------- A1 — openspec validate + doctor ----------
+
+post_apply_validate_openspec() {
+  if [[ "$OPT_VALIDATE" != "true" ]]; then
+    advisory "A1 openspec validate: skipado por --no-validate"
+    return
+  fi
+
+  if [[ "$BOOTSTRAP" == "true" ]]; then
+    advisory "A1 openspec validate: skipado em bootstrap (rode 'openspec init' primeiro)"
+    return
+  fi
+
+  if is_ci; then
+    advisory "A1 openspec validate: skipado em CI (sem ganho marginal)"
+    return
+  fi
+
+  if ! command -v openspec >/dev/null 2>&1; then
+    advisory "A1 openspec: binário não encontrado no PATH — instale via 'npm install -g openspec' ou 'uv tool install openspec'"
+    return
+  fi
+
+  step "A1" "Validando com openspec..."
+  if openspec validate 2>&1 | sed 's/^/    /'; then
+    echo "  ✓ openspec validate"
+  else
+    warn "openspec validate falhou — revise openspec/changes e openspec/specs"
+  fi
+  if openspec doctor 2>&1 | sed 's/^/    /'; then
+    echo "  ✓ openspec doctor"
+  else
+    warn "openspec doctor falhou — revise referências em openspec/"
+  fi
+}
+
+# ---------- B3 — sanity check de tooling ----------
+
+sanity_check_tooling() {
+  if [[ "$OPT_TOOLS_CHECK" != "true" ]]; then
+    advisory "B3 tools check: skipado por --no-tools-check"
+    return
+  fi
+
+  if is_ci; then
+    advisory "B3 tools check: skipado em CI"
+    return
+  fi
+
+  step "B3" "Sanity check de tooling esperado..."
+  local tools=(
+    "openspec:npm install -g openspec"
+    "gh:ver https://github.com/cli/cli#installation"
+    "jq:instale jq via package manager (apt/brew/portable binary)"
+    "python3:https://www.python.org/downloads/"
+    "node:https://nodejs.org/"
+    "pre-commit:uv tool install pre-commit | pip install pre-commit"
+    "basic-memory:uv tool install basic-memory"
+    "serena:uvx --from git+https://github.com/oraios/serena serena"
+  )
+  for entry in "${tools[@]}"; do
+    local bin="${entry%%:*}" hint="${entry#*:}"
+    if command -v "$bin" >/dev/null 2>&1; then
+      printf "    ✓ %-15s %s\n" "$bin" "$(command -v "$bin")"
+    else
+      printf "    ✗ %-15s instale: %s\n" "$bin" "$hint"
+    fi
+  done
+}
+
+# ---------- v1.1.1 — auto-install hooks pre-commit ----------
+
+post_apply_install_hooks() {
+  if [[ "$MODE" == "check" ]]; then
+    return  # read-only
+  fi
+  if [[ "$OPT_INSTALL_HOOKS" != "true" ]]; then
+    advisory "Hooks: auto-install skipado por --no-install-hooks"
+    advisory "  Para instalar manualmente: pre-commit install --hook-type pre-commit --hook-type pre-push"
+    return
+  fi
+
+  # --install-hooks força passar direto para install (ignora guards)
+  if [[ "$OPT_INSTALL_HOOKS_FORCE" != "true" ]]; then
+    if ! has_git_dir; then
+      advisory "Hooks: .git/ ausente em $PROJECT_ROOT — rode 'git init' e depois 'pre-commit install ...'"
+      return
+    fi
+    if is_ci; then
+      advisory "Hooks: CI detectado — auto-install skipado (rode em ambiente local se quiser hooks)"
+      return
+    fi
+    if detect_alt_hook_manager; then
+      advisory "Hooks: detectado hook manager alternativo (.husky/lefthook.yml/.simple-git-hooks). Não instalei pre-commit — consulte a doc do manager detectado."
+      return
+    fi
+  fi
+
+  if ! command -v pre-commit >/dev/null 2>&1; then
+    advisory "Hooks: 'pre-commit' não encontrado no PATH — instale via 'uv tool install pre-commit' ou 'pip install pre-commit', depois rode:"
+    advisory "    pre-commit install --hook-type pre-commit --hook-type pre-push"
+    return
+  fi
+
+  step "Hooks" "Regenerando .git/hooks/pre-commit e .git/hooks/pre-push..."
+  if pre-commit install --hook-type pre-commit --hook-type pre-push 2>&1 | sed 's/^/    /'; then
+    echo "  ✓ Hooks pre-commit e pre-push instalados"
+    echo "  ℹ NÃO versionar .git/hooks/* (INSTALL_PYTHON hardcoded da máquina)"
+  else
+    warn "pre-commit install falhou (exit $?) — rode manualmente:"
+    warn "    pre-commit install --hook-type pre-commit --hook-type pre-push"
+  fi
+}
+
+# ---------- C1 — heurística advisory de stack ----------
+
+suggest_stack_placeholders() {
+  if [[ "$OPT_STACK_SUGGEST" != "true" ]]; then
+    advisory "C1 stack suggest: skipado por --no-stack-suggest"
+    return
+  fi
+
+  step "C1" "Heurística advisory de stack (não aplica — revise manualmente)..."
+
+  local py="$PROJECT_ROOT/pyproject.toml"
+  local pkg="$PROJECT_ROOT/package.json"
+
+  if [[ -f "$py" ]]; then
+    advisory "pyproject.toml detectado:"
+    local content; content=$(cat "$py" 2>/dev/null)
+    if echo "$content" | grep -q -i "fastapi"; then
+      echo "    {{FRAMEWORK_BACKEND}} = FastAPI"
+    fi
+    if echo "$content" | grep -q -i "flask"; then
+      echo "    {{FRAMEWORK_BACKEND}} = Flask"
+    fi
+    if echo "$content" | grep -q -i "django"; then
+      echo "    {{FRAMEWORK_BACKEND}} = Django"
+    fi
+    if echo "$content" | grep -q -i "ruff"; then
+      echo "    {{LINTER_BACKEND}} = ruff"
+    fi
+    if echo "$content" | grep -q -i "pytest"; then
+      echo "    {{TEST_FRAMEWORK_BACKEND}} = pytest"
+    fi
+    echo "    {{LANG_BACKEND}} = Python"
+    echo "    {{PKG_MANAGER_BACKEND}} = uv (recomendado) ou pip"
+  else
+    advisory "pyproject.toml não encontrado — stack backend não deduzida"
+  fi
+
+  if [[ -f "$pkg" ]]; then
+    advisory "package.json detectado:"
+    local content; content=$(cat "$pkg" 2>/dev/null)
+    if echo "$content" | grep -q -i "\"next\""; then
+      echo "    {{FRAMEWORK_FRONTEND}} = Next.js"
+    fi
+    if echo "$content" | grep -q -i "\"react\""; then
+      echo "    {{FRAMEWORK_FRONTEND}} = React"
+    fi
+    if echo "$content" | grep -q -i "\"vue\""; then
+      echo "    {{FRAMEWORK_FRONTEND}} = Vue"
+    fi
+    if echo "$content" | grep -q -i "\"eslint\""; then
+      echo "    {{LINTER_FRONTEND}} = eslint"
+    fi
+    if echo "$content" | grep -q -i "\"vitest\""; then
+      echo "    {{TEST_FRAMEWORK_FRONTEND}} = vitest"
+    elif echo "$content" | grep -q -i "\"jest\""; then
+      echo "    {{TEST_FRAMEWORK_FRONTEND}} = jest"
+    fi
+    echo "    {{LANG_FRONTEND}} = TypeScript/JavaScript"
+    echo "    {{PKG_MANAGER_FRONTEND}} = npm (default) ou pnpm/yarn"
+  else
+    advisory "package.json não encontrado — stack frontend não deduzida"
+  fi
+
+  advisory "Sugestões são advisory — revise e substitua manualmente em:"
+  advisory "    AGENTS.md / openspec/config.yaml / .pre-commit-config.yaml / TESTING.md / Makefile.example"
+}
+
+# ---------- executa pipeline pós-apply (somente em apply/force) ----------
+
+if [[ "$MODE" == "apply" || "$MODE" == "force" ]]; then
+  step "B2" "Sync .gitignore delimitado..."
+  sync_gitignore_delimited
+
+  step "A3" "Bootstrap de opencode.json..."
+  maybe_create_opencode_json
+
+  post_apply_validate_openspec
+
+  sanity_check_tooling
+
+  post_apply_install_hooks
+
+  suggest_stack_placeholders
+fi
+
+# ---------- pós-sync checklist adaptativo ----------
 
 echo
 echo "✓ Workflow MaxDev v$WORKFLOW_VERSION sincronizado em $PROJECT_ROOT"
 echo
-echo "Próximos passos (edite os placeholders {{...}} conforme seu stack):"
-echo "  1. AGENTS.md                     — Targets canônicos, Convenções, Referências"
+echo "Próximos passos:"
+echo "  1. AGENTS.md                     — Targets canônicos, Convenções"
 echo "  2. openspec/config.yaml          — context, conventions"
 echo "  3. .pre-commit-config.yaml       — {{LINTER_BACKEND_RUFF}} / {{LINTER_FRONTEND_ESLINT}}"
-echo "  4. opencode.example.json (renomeie → opencode.json)"
-echo "                                   — {{PROJECT_NAME}}, {{PROJECT_ABSOLUTE_PATH}}"
-echo "  5. TESTING.md                    — {{TEST_FRAMEWORK_BACKEND}}, {{TEST_FRAMEWORK_FRONTEND}}"
-echo "  6. Makefile.example (renomeie → Makefile)"
-echo "                                   — implemente os targets (stubs saem com exit 1)"
+if [[ "$AUTO_OPENCODE_CREATED" == "true" ]]; then
+  echo "  4. opencode.json                 — ✓ criado automaticamente (revise {{PROJECT_NAME}})"
+else
+  echo "  4. opencode.example.json         — renomeie → opencode.json e edite"
+fi
+echo "  5. TESTING.md                     — {{TEST_FRAMEWORK_BACKEND}}, {{TEST_FRAMEWORK_FRONTEND}}"
+echo "  6. Makefile.example               — renomeie → Makefile e implemente targets"
+echo "     (stubs saem com exit 1 — não suba Makefile com stubs)"
+echo "  7. README.md / .editorconfig      — personalize conforme o projeto"
 echo
-echo "Aplique os hooks do pre-commit (regenera .git/hooks/*):"
+echo "Aplique os hooks do pre-commit se ainda não o fez:"
 echo "     pre-commit install --hook-type pre-commit --hook-type pre-push"
-echo "   NÃO versionar .git/hooks/* (caminhos hardcoded da máquina)."
 echo
 echo "Valide o resultado:"
 echo "     openspec validate && openspec doctor && make help"
