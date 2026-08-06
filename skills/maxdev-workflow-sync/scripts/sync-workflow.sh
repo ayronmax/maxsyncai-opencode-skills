@@ -71,6 +71,8 @@ MODE="dry-run"
 [[ "$1" == "--force" ]] && MODE="force"
 
 # ---------- arquivos canônicos (caminho → origem skill) ----------
+# Canônicos: clobber em --apply / --force (comportamento padrão). Formam o
+# "contrato" sobrescrevível — mudanças neles são drift a sincronizar.
 
 declare -A CANON=(
   ["AGENTS.md"]="$ASSETS/AGENTS.md"
@@ -80,6 +82,17 @@ declare -A CANON=(
   ["openspec/config.yaml"]="$ASSETS/openspec/config.yaml"
   ["openspec/templates/explore-brief.md"]="$ASSETS/openspec/templates/explore-brief.md"
   ["openspec/templates/design.md"]="$ASSETS/openspec/templates/design.md"
+  [".pre-commit-config.yaml"]="$ASSETS/pre-commit-config.yaml"
+)
+
+# ---------- starters (caminho → origem skill) ----------
+# Starters: só ADD se inexistente. MODIFY exige --force (preserva custom do
+# usuário). Não são drift — são pontapé inicial para o usuário editar.
+
+declare -A STARTERS=(
+  ["opencode.example.json"]="$ASSETS/opencode.example.json"
+  ["TESTING.md"]="$ASSETS/TESTING.md"
+  ["Makefile.example"]="$ASSETS/Makefile.example"
 )
 
 # ---------- detecta estado ----------
@@ -114,7 +127,11 @@ fi
 
 step "2" "Comparando arquivos canônicos..."
 
-CHANGES=()
+CHANGES=()        # "<ADD|MODIFY> <dst>"  para canônicos
+STARTER_ADDS=()   # "<dst>"              starters a criar (inexistentes)
+STARTER_FORCES=() # "<dst>"              starters a sobrescrever (só em --force)
+STARTER_SKIPS=()  # "<dst>"              starters existentes preservados
+
 for dst in "${!CANON[@]}"; do
   src="${CANON[$dst]}"
   # override por EXTERNAL_OVERRIDES se setado e o arquivo existir lá
@@ -129,15 +146,46 @@ for dst in "${!CANON[@]}"; do
   fi
 done
 
-if [[ ${#CHANGES[@]} -eq 0 ]]; then
+for dst in "${!STARTERS[@]}"; do
+  src="${STARTERS[$dst]}"
+  if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/$dst" ]]; then
+    src="$EXTERNAL_OVERRIDES/$dst"
+  fi
+  full_dst="$PROJECT_ROOT/$dst"
+  if [[ ! -f "$full_dst" ]]; then
+    STARTER_ADDS+=("$dst")
+  elif [[ "$MODE" == "force" ]]; then
+    STARTER_FORCES+=("$dst")
+  else
+    STARTER_SKIPS+=("$dst")
+  fi
+done
+
+TOTAL_CHANGES=$(( ${#CHANGES[@]} + ${#STARTER_ADDS[@]} + ${#STARTER_FORCES[@]} ))
+
+if [[ $TOTAL_CHANGES -eq 0 ]]; then
   echo "  ✓ Nenhum drift detectado. Workflow sincronizado."
+  if [[ ${#STARTER_SKIPS[@]} -gt 0 ]]; then
+    echo "  ℹ Starters preservados (use --force para sobrescrever):"
+    for s in "${STARTER_SKIPS[@]}"; do echo "    - $s"; done
+  fi
   exit 0
 fi
 
-echo "  ${#CHANGES[@]} arquivo(s) com drift:"
+echo "  $TOTAL_CHANGES change(s) detectada(s):"
 for c in "${CHANGES[@]}"; do
   echo "    - $c"
 done
+for dst in "${STARTER_ADDS[@]}"; do
+  echo "    - ADD-S $dst  (starter novo)"
+done
+for dst in "${STARTER_FORCES[@]}"; do
+  echo "    - MODIFY-S $dst  (starter sobrescrito --force)"
+done
+if [[ ${#STARTER_SKIPS[@]} -gt 0 ]]; then
+  echo "  ℹ Starters preservados (use --force para sobrescrever):"
+  for s in "${STARTER_SKIPS[@]}"; do echo "    - $s"; done
+fi
 
 # ---------- mode check: para aqui ----------
 
@@ -166,14 +214,26 @@ if [[ "$MODE" == "dry-run" ]]; then
       diff -u "$PROJECT_ROOT/$dst" "$src" | head -30 || true
     fi
   done
+  for dst in "${STARTER_ADDS[@]}"; do
+    echo "  ─── $dst ───"
+    echo "  (starter novo — não exibe diff)"
+  done
+  for dst in "${STARTER_FORCES[@]}"; do
+    src="${STARTERS[$dst]}"
+    if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/$dst" ]]; then
+      src="$EXTERNAL_OVERRIDES/$dst"
+    fi
+    echo "  ─── $dst ───"
+    diff -u "$PROJECT_ROOT/$dst" "$src" | head -30 || true
+  done
   echo
-  read -r -p "[?] Aplicar ${#CHANGES[@]} mudança(s)? [y/N] " confirm
+  read -r -p "[?] Aplicar $TOTAL_CHANGES mudança(s)? [y/N] " confirm
   [[ "$confirm" =~ ^[Yy]$ ]] || abort "abortado pelo usuário."
 fi
 
 # ---------- apply ----------
 
-step "3" "Aplicando ${#CHANGES[@]} mudança(s)..."
+step "3" "Aplicando $TOTAL_CHANGES mudança(s)..."
 
 for c in "${CHANGES[@]}"; do
   dst=$(echo "$c" | cut -d' ' -f2)
@@ -186,6 +246,18 @@ for c in "${CHANGES[@]}"; do
   cp "$src" "$full_dst"
   chmod +x "$full_dst" 2>/dev/null || true  # scripts
   echo "  ✓ $dst"
+done
+
+# starters: só ADD (ou --force overwrite)
+for dst in "${STARTER_ADDS[@]}" "${STARTER_FORCES[@]}"; do
+  src="${STARTERS[$dst]}"
+  if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/$dst" ]]; then
+    src="$EXTERNAL_OVERRIDES/$dst"
+  fi
+  full_dst="$PROJECT_ROOT/$dst"
+  mkdir -p "$(dirname "$full_dst")"
+  cp "$src" "$full_dst"
+  echo "  ✓ $dst  (starter)"
 done
 
 # ---------- atualiza workflow_version ----------
@@ -208,23 +280,37 @@ fi
 # comentário "Template gerado por maxdev-workflow-sync v{{WORKFLOW_VERSION}}.").
 # Substituir no destino após cada apply (bootstrap ou drift update). Seguro:
 # sed no-op se o placeholder não existir (usuário já substituiu manualmente).
-AGENTS_DST="$PROJECT_ROOT/AGENTS.md"
-if [[ -f "$AGENTS_DST" ]] && grep -q -F '{{WORKFLOW_VERSION}}' "$AGENTS_DST"; then
-  sed -i "s|{{WORKFLOW_VERSION}}|$WORKFLOW_VERSION|g" "$AGENTS_DST"
-  echo "  ✓ AGENTS.md: {{WORKFLOW_VERSION}} → $WORKFLOW_VERSION"
-fi
+# Os starters (pre-commit-config.yaml, opencode.example.json, TESTING.md,
+# Makefile.example) também carregam {{WORKFLOW_VERSION}} nos cabeçalhos.
 
-# ---------- sugestão de placeholders ----------
+for f in "AGENTS.md" ".pre-commit-config.yaml" "opencode.example.json" \
+         "TESTING.md" "Makefile.example"; do
+  full="$PROJECT_ROOT/$f"
+  if [[ -f "$full" ]] && grep -q -F '{{WORKFLOW_VERSION}}' "$full"; then
+    sed -i "s|{{WORKFLOW_VERSION}}|$WORKFLOW_VERSION|g" "$full"
+    echo "  ✓ $f: {{WORKFLOW_VERSION}} → $WORKFLOW_VERSION"
+  fi
+done
 
-if [[ "$BOOTSTRAP" == "true" ]]; then
-  echo
-  echo "ℹ Bootstrap completo. Edite os placeholders {{...}} em:"
-  echo "    - AGENTS.md (seções Targets canônicos, Convenções, Referências)"
-  echo "    - openspec/config.yaml (context, conventions)"
-  echo "  Substitua pelos valores do seu projeto."
-fi
+# ---------- pós-sync checklist ----------
 
 echo
 echo "✓ Workflow MaxDev v$WORKFLOW_VERSION sincronizado em $PROJECT_ROOT"
-echo "  Próximo: rode 'openspec validate' + 'openspec doctor' para sanity."
+echo
+echo "Próximos passos (edite os placeholders {{...}} conforme seu stack):"
+echo "  1. AGENTS.md                     — Targets canônicos, Convenções, Referências"
+echo "  2. openspec/config.yaml          — context, conventions"
+echo "  3. .pre-commit-config.yaml       — {{LINTER_BACKEND_RUFF}} / {{LINTER_FRONTEND_ESLINT}}"
+echo "  4. opencode.example.json (renomeie → opencode.json)"
+echo "                                   — {{PROJECT_NAME}}, {{PROJECT_ABSOLUTE_PATH}}"
+echo "  5. TESTING.md                    — {{TEST_FRAMEWORK_BACKEND}}, {{TEST_FRAMEWORK_FRONTEND}}"
+echo "  6. Makefile.example (renomeie → Makefile)"
+echo "                                   — implemente os targets (stubs saem com exit 1)"
+echo
+echo "Aplique os hooks do pre-commit (regenera .git/hooks/*):"
+echo "     pre-commit install --hook-type pre-commit --hook-type pre-push"
+echo "   NÃO versionar .git/hooks/* (caminhos hardcoded da máquina)."
+echo
+echo "Valide o resultado:"
+echo "     openspec validate && openspec doctor && make help"
 exit 0

@@ -35,18 +35,32 @@ maxsyncai-opencode-skills/              ← repo do package (raiz)
         ├── scripts/sync-workflow.sh    ← orquestrador idempotente
         ├── assets/
         │   ├── workflow.version        ← WORKFLOW_VERSION (semver)
-        │   ├── AGENTS.md               ← template com placeholders
-        │   ├── dev-workflow.md         ← template
-        │   ├── scripts/close-change.sh ← copia como-is
-        │   ├── scripts/push-safe.sh    ← copia como-is
-        │   └── openspec/
-        │       ├── config.yaml         ← template com placeholders + workflow_version
-        │       └── templates/
-        │           ├── explore-brief.md
-        │           └── design.md
+        │   ├── AGENTS.md               ← canônico (template com placeholders)
+        │   ├── dev-workflow.md         ← canônico (template)
+        │   ├── pre-commit-config.yaml  ← canônico (governança block-main/push)
+        │   ├── scripts/close-change.sh ← canônico (copia como-is)
+        │   ├── scripts/push-safe.sh    ← canônico (copia como-is)
+        │   ├── openspec/
+        │   │   ├── config.yaml         ← canônico (template + workflow_version)
+        │   │   └── templates/
+        │   │       ├── explore-brief.md
+        │   │       └── design.md
+        │   ├── opencode.example.json   ← starter (só ADD; MODIFY exige --force)
+        │   ├── TESTING.md              ← starter (skeleton genérico)
+        │   └── Makefile.example        ← starter (stubs exit 1; renomeie p/ Makefile)
         └── references/
             └── merge-strategy.md       ← detalhes da estratégia dry-run+diff
 ```
+
+### Canônicos vs starters
+
+- **Canônicos** (8 arquivos): formam o contrato sobrescrevível. Em `--apply`
+  ou `--force`, o skill **clobber** o destino (preservando o `workflow_version`).
+  Drift entre versão instalada e da skill é detectado e reportado.
+- **Starters** (3 arquivos): pontapé inicial para o usuário customizar. Em
+  `--apply` o skill só **cria se inexistente** — nunca clobber sem `--force`.
+  Isso preserva customizações legadas (ex.: `Makefile` real não é tocado;
+  `opencode.example.json` não substitui `opencode.json`).
 
 ## Reprodutibilidade cross-project
 
@@ -56,8 +70,14 @@ Para aplicar este workflow em outro projeto:
    rodar o script manualmente, use o path resolvido da skill instalada (ex.:
    `bash $(opencode skill path maxdev-workflow-sync)/scripts/sync-workflow.sh --apply`,
    ou caminho direto bajo `~/.cache/opencode/packages/maxsyncai-opencode-skills@.../node_modules/maxsyncai-opencode-skills/skills/maxdev-workflow-sync/scripts/sync-workflow.sh`).
-3. Edite os placeholders `{{...}}` em `AGENTS.md` e `openspec/config.yaml`
-4. Rode `openspec validate` + `openspec doctor`
+3. Edite os placeholders `{{...}}` nos canônicos (AGENTS.md, openspec/config.yaml,
+   .pre-commit-config.yaml) e nos starters (opencode.example.json, TESTING.md,
+   Makefile.example)
+4. Renomeie starters: `opencode.example.json` → `opencode.json`;
+   `Makefile.example` → `Makefile` (implemente os targets — stubs `exit 1`)
+5. Rode `pre-commit install --hook-type pre-commit --hook-type pre-push`
+   (regenera `.git/hooks/*` a partir de `.pre-commit-config.yaml`)
+6. Rode `openspec validate` + `openspec doctor` + `make help`
 
 Skills upstream OpenSpec são instaladas separadamente via package manager — não copiadas por esta skill.
 
@@ -98,18 +118,24 @@ Após aplicar a skill num projeto novo, edite estes placeholders:
 
 | Placeholder | Onde | Significado |
 |---|---|---|
-| `{{PROJECT_NAME}}` | AGENTS.md, config.yaml | Nome do projeto |
+| `{{PROJECT_NAME}}` | AGENTS.md, config.yaml, opencode.example.json | Nome/slug do projeto |
+| `{{PROJECT_ABSOLUTE_PATH}}` | opencode.example.json | Path absoluto da raiz do projeto |
 | `{{PROJECT_DESCRIPTION}}` | config.yaml | Descrição curta |
 | `{{LANG_BACKEND}}`/`{{LANG_FRONTEND}}` | AGENTS.md, config.yaml | Linguagens |
 | `{{FRAMEWORK_BACKEND}}`/`{{FRAMEWORK_FRONTEND}}` | config.yaml | Frameworks |
-| `{{PKG_MANAGER_BACKEND}}`/`{{PKG_MANAGER_FRONTEND}}` | AGENTS.md, config.yaml | Package managers |
-| `{{TEST_FRAMEWORK_BACKEND}}`/`{{TEST_FRAMEWORK_FRONTEND}}` | AGENTS.md, config.yaml | Test frameworks |
-| `{{LINTER_BACKEND}}`/`{{LINTER_FRONTEND}}` | AGENTS.md, config.yaml | Linters |
+| `{{PKG_MANAGER_BACKEND}}`/`{{PKG_MANAGER_FRONTEND}}` | AGENTS.md, config.yaml, Makefile.example | Package managers |
+| `{{TEST_FRAMEWORK_BACKEND}}`/`{{TEST_FRAMEWORK_FRONTEND}}` | AGENTS.md, config.yaml, TESTING.md, Makefile.example | Test frameworks |
+| `{{LINTER_BACKEND}}`/`{{LINTER_FRONTEND}}` | AGENTS.md, config.yaml, Makefile.example | Linters |
+| `{{LINTER_BACKEND_RUFF}}`/`{{LINTER_FRONTEND_ESLINT}}` | .pre-commit-config.yaml | Descomentar blocos ruff/eslint conforme stack |
 | `{{DB}}` | config.yaml | Banco de dados |
 | `{{INFRA}}` | config.yaml | Infra (Docker Compose, etc.) |
 | `{{MAKE_TARGETS}}` | AGENTS.md | Targets canônicos do Makefile (lista) |
 | `{{OPTIONAL_REFERENCES}}` | AGENTS.md | Referências extra (ex.: TESTING.md) |
 | `{{PROJECT_SPECIFIC_NOTES}}` | config.yaml | Notas específicas do projeto |
+| `{{WORKFLOW_VERSION}}` | AGENTS.md, .pre-commit-config.yaml, opencode.example.json, TESTING.md, Makefile.example | Auto-substituído pelo script (versão da skill) |
+
+> `{{WORKFLOW_VERSION}}` é o único placeholder **auto-substituído** pelo
+> `sync-workflow.sh` após cada apply. Os demais ficam como-is até edição humana.
 
 ## Detecção adaptativa a mudanças futuras do openspec
 

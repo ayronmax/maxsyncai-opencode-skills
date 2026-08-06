@@ -233,5 +233,9 @@ change com `tasks.md` pendente de commit.
 - `openspec/templates/explore-brief.md` — template que alimenta `proposal.md`.
 - `openspec/config.yaml` — contexto do projeto + rules de artefatos (proposal/
   design/tasks).
+- `.pre-commit-config.yaml` — hooks `block-main` (pre-commit) e `block-main-push`
+  (pre-push) reforçam GATE 4. Day-0: `pre-commit install --hook-type pre-commit
+  --hook-type pre-push` regenera `.git/hooks/*` (não versionar — caminhos
+  hardcoded da máquina).
 
 <!-- {{OPTIONAL_REFERENCES}} — adicione referências extras do seu projeto aqui (ex.: `TESTING.md`). -->

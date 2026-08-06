@@ -1,0 +1,51 @@
+// ==========================================================================
+// opencode.example.json — Starter gerado por maxdev-workflow-sync
+// v{{WORKFLOW_VERSION}}
+//
+// RENOMEIE para `opencode.json` após editar os placeholders.
+// Este arquivo NÃO sobrescreve `opencode.json` existente — a skill só cria
+// o `.example` se inexistente. Drift-check é advisory (reporta ausência).
+//
+// ESCOPO: somente MCPs **project-scoped** (paths/ids específicos deste
+// projeto). MCPs globais (compartilhados entre projetos) vivem em:
+//     ~/.config/opencode/opencode.jsonc
+// e NÃO devem ser duplicados aqui.
+//
+// Placeholders a substituir:
+//   {{PROJECT_NAME}}          — slug do projeto (ex.: maxnexa)
+//   {{PROJECT_ABSOLUTE_PATH}} — path absoluto da raiz do projeto
+//
+// MCPs globais esperados (instale em ~/.config/opencode/opencode.jsonc):
+//   - octocode    : pesquisa de código em GitHub/local (ghSearchCode, etc.)
+//   - context7    : docs de bibliotecas/frameworks atualizadas
+//   - engram      : memória de equipe cross-projeto
+//   - tokenscope  : análise de uso de tokens da sessão
+//   - rtk         : compressão automática de output git/test
+//
+// Para adicionar um MCP global, edite ~/.config/opencode/opencode.jsonc —
+// ver acne `https://github.com/maxsyncai/maxsyncai-opencode-skills` para
+// o snippet pronto (seção "Registro de dependências skills + MCPs globais").
+// ==========================================================================
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "basic-memory": {
+      "type": "local",
+      "command": ["uvx", "basic-memory", "mcp", "--project", "{{PROJECT_NAME}}"],
+      "enabled": true
+    },
+    "serena": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from", "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context", "ide-assistant",
+        "--project", "{{PROJECT_ABSOLUTE_PATH}}"
+      ],
+      "enabled": true,
+      "timeout": 60000
+    }
+  }
+}
