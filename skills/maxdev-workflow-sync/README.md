@@ -26,8 +26,12 @@ repositório. Idempotente, reprodutível, copia só o **contrato** (não skills 
 
 ## 2. O que a skill faz
 
-Copia **7 arquivos canônicos** que definem o workflow MaxDev para a raiz do
-projeto-alvo:
+Copia **9 canônicos + 5 starters** que definem o workflow MaxDev para a raiz do
+projeto-alvo. A skill também executa um **pipeline pós-apply** guardado de 8
+etapas (validação, sanity check, hooks, heurística de stack) e suporta **flags
+opt-out** para cada etapa.
+
+### Canônicos (clobber em `--apply`/`--force`)
 
 | Arquivo | Natureza |
 |---|---|
@@ -38,6 +42,18 @@ projeto-alvo:
 | `openspec/config.yaml` | Contexto do projeto + `workflow_version` (semver nosso) |
 | `openspec/templates/explore-brief.md` | Template que alimenta `proposal.md` |
 | `openspec/templates/design.md` | Template de design com `## Open Questions` |
+| `.pre-commit-config.yaml` | Governança `block-main`/`block-main-push` (reforça GATE 4) |
+| `.gitignore` | Bloco delimitado entre markers (preserva entries custom; source no asset é `gitignore.template` — sem dot para escapar blacklist npm) |
+
+### Starters (ADD-only; sobrescreve só com `--force`)
+
+| Arquivo | Natureza |
+|---|---|
+| `opencode.example.json` | Só MCPs project-scoped + comentário dos globais |
+| `TESTING.md` | Skeleton genérico de performance/isolamento |
+| `Makefile.example` | Stubs `exit 1` (renomeie p/ `Makefile` e implemente) |
+| `.editorconfig` | UTF-8/LF/indent 4-Python-2-TS-JSON-MD |
+| `README.md` | Seção "Fluxo de desenvolvimento" como walk-through primeira change |
 
 Skills upstream OpenSpec (`openspec-propose`, `openspec-apply-change`, etc.) **não
 são copiadas** — são instaladas à parte via package manager. Esta skill só
@@ -53,12 +69,12 @@ dúvida — por isso o panorama antes de detalhar:
 | # | Entidade | Onde vive | Função | Obrigatória? |
 |---|---|---|---|---|
 | 1 | **Repo da skill (package)** | Repo que distribui o package (`maxsyncai-opencode-skills`, carrega `skills/maxdev-workflow-sync/`) | Fonte canônica da skill: `SKILL.md`, `scripts/sync-workflow.sh`, `assets/` (templates embutidos como defaults) | Sim |
-| 2 | **Override local** (opt-in) | Diretório local apontado via `EXTERNAL_OVERRIDES` (env var) | Override dos 7 canônicos para forks/air-gapped/testes. Default: não usado — skill é self-contained em `assets/` | Não (opcional, avançado) |
-| 3 | **Projeto-alvo** | Qualquer repo que adota o workflow MaxDev | Recebe os 7 canônicos na raiz após `--apply` | Sim (é o destino) |
+| 2 | **Override local** (opt-in) | Diretório local apontado via `EXTERNAL_OVERRIDES` (env var) | Override dos 9 canônicos para forks/air-gapped/testes. Default: não usado — skill é self-contained em `assets/` | Não (opcional, avançado) |
+| 3 | **Projeto-alvo** | Qualquer repo que adota o workflow MaxDev | Recebe os 9 canônicos + 5 starters na raiz após `--apply` | Sim (é o destino) |
 
 **Relação**: o script `sync-workflow.sh` (entidade 1) lê da entidade 2 (se
-explicitamente setado via env) ou do `assets/` embutido (default), e copia os 7
-arquivos para a raiz da entidade 3.
+explicitamente setado via env) ou do `assets/` embutido (default), e copia os arquivos
+para a raiz da entidade 3.
 
 **Dois repos distintos por design**: o package (entidade 1) e o projeto-alvo
 (entidade 3) vivem em repos separados desde que a skill virou plugin opencode.
@@ -92,7 +108,7 @@ skill está instalada:
   e rode:
 
 ```bash
-bash <skill_dir>/scripts/sync-workflow.sh [modo]
+bash <skill_dir>/scripts/sync-workflow.sh [modo] [flags...]
 ```
 
 > **⚠ `PROJECT_ROOT`** — o script usa `PROJECT_ROOT="${PROJECT_ROOT:-$(pwd)}"`
@@ -106,7 +122,7 @@ bash <skill_dir>/scripts/sync-workflow.sh [modo]
 >   bash <skill_dir>/scripts/sync-workflow.sh --apply
 > ```
 >
-> Sem isso, o script copia os 7 arquivos canônicos para o diretório atual —
+> Sem isso, o script copia os arquivos canônicos para o diretório atual —
 > podendo sobrescrever arquivos do projeto errado. Isto é comportamento
 > documentado (não bug), mas é a principal pegadinha operacional desta skill.
 >
@@ -115,12 +131,38 @@ bash <skill_dir>/scripts/sync-workflow.sh [modo]
 > corretamente e você não precisa exportar nada. O cuidado extra vale só
 > quando roda o script manualmente fora do agente.
 
-### 5.1 Idempotência
+### 5.1 Semântica MODE × FORCE (v1.2.4+)
 
-- Segundo run com **mesma versão** → no-op (vira `--check` automaticamente).
+MODE (read-write) e FORCE (modifier) são variáveis ortogonais. **A ordem dos
+args não altera a semântica**:
+
+| Args | MODE | FORCE | Resultado |
+|---|---|---|---|
+| `--apply` | apply | false | Aplica drift. Se versão instalada == skill: demote p/ check + aviso explícito |
+| `--check` | check | false | **Read-only** garantido (--force não destrava escrita) |
+| `--force` | apply | true | Alias `--apply --force`: aplica mesmo se versão igual, re-aplica starters |
+| `--check --force` | check | false | ≡ `--check` + warning `⚠ --force ignorado` |
+
+### 5.2 Flags opt-out do pipeline pós-apply
+
+O pipeline pós-apply (8 etapas guardadas) roda automaticamente em `--apply`/
+`--force`. Flags para desabilitar seletivamente:
+
+| Flag | Skipa |
+|---|---|
+| `--no-install-hooks` | Auto-install de hooks pre-commit (`--install-hooks` força mesmo em CI) |
+| `--no-validate` | `openspec validate` + `openspec doctor` |
+| `--no-tools-check` | Sanity check de tooling |
+| `--no-stack-suggest` | Heurística de stack (lê pyproject/package.json; NÃO aplica) |
+| `--no-gitignore-sync` | Sync delimitado de `.gitignore` |
+| `--no-auto-opencode` | Criação de `opencode.json` em bootstrap |
+| `--no-derivable-placeholders` | Substituição de `{{PROJECT_NAME}}` / `{{PROJECT_ABSOLUTE_PATH}}` |
+
+### 5.3 Idempotência
+
+- Segundo run com **mesma versão** → drift check (no-op em escrita a menos que `--force`).
 - Versão **diferente** → dry-run default, pede confirmação.
-- **Sem `workflow_version`** em `openspec/config.yaml` (projeto legado ou
-  bootstrap) → copia todos os templates.
+- **Sem `workflow_version`** em `openspec/config.yaml` (bootstrap) → copia todos os templates.
 
 ---
 
@@ -192,7 +234,7 @@ projeto-alvo.
 
 ## 7. Override local via `EXTERNAL_OVERRIDES` (opt-in)
 
-A skill é **self-contained** — todos os 7 arquivos canônicos vivem em `assets/`
+A skill é **self-contained** — todos os 9 canônicos + 5 starters vivem em `assets/`
 dentro do package. Não há dependência de repo externo nem auto-clone via rede.
 
 Para casos avançados (fork privado do template, ambientes air-gapped, testes
@@ -263,7 +305,7 @@ cp $SKILL_DIR/assets/workflow.version .
 - **Bump de versão**: faça no package (`assets/workflow.version` + commit + tag),
   não via override. Override é para experimentação local, não para
   distribuir versão — para distribuir, bump o package.
-- **Atualizar conteúdo dos 7 canônicos**: edite `assets/` no repo do package,
+- **Atualizar conteúdo dos 9 canônicos + 5 starters**: edite `assets/` no repo do package,
   commit, push, tag. Projetos detectam drift no próximo `--check`.
 
 ---
@@ -294,9 +336,9 @@ Após copiar, o script imprime:
     - openspec/config.yaml (context, conventions)
 ```
 
-A substituição dos placeholders é **manual**, feita por você no projeto-alvo
+A substituição dos placeholders stack-specific é **manual** (os deriváveis — PROJECT_NAME, PROJECT_ABSOLUTE_PATH, WORKFLOW_VERSION — são auto-substituídos pela própria skill)
 após rodar a skill. A skill não faz substituição automática — só copia o template
-e te avisa. **Exceção**: `{{WORKFLOW_VERSION}}` é auto-substituído (ver
+e te avisa. **Auto-substituídos**: `{{WORKFLOW_VERSION}}`, `{{PROJECT_NAME}}`, `{{PROJECT_ABSOLUTE_PATH}}` (ver
 [§9](#9-placeholders-a-substituir-no-bootstrap)).
 
 ### 8.2 Quem mantém os templates
@@ -317,7 +359,7 @@ genérico. Ver [§12.5 Dualidade](#125-dualidade-vivo-vs-template).
 ### 8.3 Override local como alternativa aos `assets/` (avançado)
 
 Para experimentação local (sem redistribuir package), use
-`EXTERNAL_OVERRIDES` apontando para um diretório local com os 7 canônicos.
+`EXTERNAL_OVERRIDES` apontando para um diretório local com os 9 canônicos + 5 starters.
 A skill puxa dele se setado; senão, cai em `assets/`. Ver
 [§7 Override local](#7-override-local-via-external_overrides-opt-in).
 
@@ -325,31 +367,43 @@ A skill puxa dele se setado; senão, cai em `assets/`. Ver
 
 ## 9. Placeholders a substituir no bootstrap
 
-Após `--apply` num projeto novo, edite os `{{...}}`. Lista real (conferida em
-`assets/`):
+Após `--apply` num projeto novo, edite os `{{...}}`. Dividem-se em 3 categorias:
 
-| Placeholder | Onde aparece | Substituição | Significado | Exemplo |
-|---|---|---|---|---|
-| `{{PROJECT_NAME}}` | `dev-workflow.md`, `openspec/config.yaml` | Manual | Nome do projeto | `meu-projeto` |
-| `{{PROJECT_DESCRIPTION}}` | `openspec/config.yaml` | Manual | Descrição curta | `Plataforma de e-commerce B2B` |
-| `{{LANG_VERSION}}` | `openspec/config.yaml` | Manual | Versão da linguagem principal | `3.13` |
-| `{{LANG_BACKEND}}` / `{{LANG_FRONTEND}}` | `AGENTS.md`, `openspec/config.yaml` | Manual | Linguagens | `Python 3.13` / `TypeScript` |
-| `{{FRAMEWORK_BACKEND}}` / `{{FRAMEWORK_FRONTEND}}` | `openspec/config.yaml` | Manual | Frameworks | `FastAPI` / `Next.js` |
-| `{{PKG_MANAGER_BACKEND}}` / `{{PKG_MANAGER_FRONTEND}}` | `AGENTS.md`, `openspec/config.yaml` | Manual | Package managers | `uv` / `npm` |
-| `{{TEST_FRAMEWORK_BACKEND}}` / `{{TEST_FRAMEWORK_FRONTEND}}` | `AGENTS.md`, `openspec/config.yaml` | Manual | Test frameworks | `pytest` / `Vitest` |
-| `{{LINTER_BACKEND}}` / `{{LINTER_FRONTEND}}` | `AGENTS.md`, `openspec/config.yaml` | Manual | Linters | `ruff` / `ESLint` |
-| `{{DB}}` | `openspec/config.yaml` | Manual | Banco de dados | `PostgreSQL` |
-| `{{INFRA}}` | `openspec/config.yaml` | Manual | Infra | `Docker Compose` |
-| `{{MAKE_TARGETS}}` | `AGENTS.md` | Manual | Targets canônicos do Makefile (lista) | `make lint`, `make test` |
-| `{{OPTIONAL_REFERENCES}}` | `AGENTS.md` | Manual | Referências extra (ex.: `TESTING.md`) | `TESTING.md` |
-| `{{PROJECT_CONVENTIONS}}` | `AGENTS.md` | Manual | Convenções específicas do projeto | estilo de commit, etc. |
-| `{{PROJECT_SPECIFIC_NOTES}}` | `openspec/config.yaml` | Manual | Notas específicas do projeto | convenções internas |
-| `{{WORKFLOW_VERSION}}` | `AGENTS.md` | **Auto** | Versão do workflow | `1.0.1` |
+### Auto-substituídos pelo script (A2)
 
-> **`{{WORKFLOW_VERSION}}` é auto-substituído** pelo `sync-workflow.sh` em
-> `AGENTS.md` do projeto-alvo após cada apply (bootstrap ou drift update), usando
-> `WORKFLOW_VERSION` lido de `assets/workflow.version`. Você não precisa editar
-> esse placeholder manualmente — apenas os demais.
+Determinísticos, derivados do cwd — substituídos automaticamente.
+
+| Placeholder | Origem |
+|---|---|
+| `{{WORKFLOW_VERSION}}` | `assets/workflow.version` |
+| `{{PROJECT_NAME}}` | `basename $PROJECT_ROOT` (slug via `slugify_name`) |
+| `{{PROJECT_ABSOLUTE_PATH}}` | `$PROJECT_ROOT` (cwd) |
+
+### Auto-substituídos em pipeline advisory (C1) — só sugere, não aplica
+
+Heurística lê `pyproject.toml`/`package.json` e **sugere** (não aplica).
+
+| Placeholder | Onde aparece |
+|---|---|
+| `{{LANG_BACKEND}}` / `{{LANG_FRONTEND}}` | AGENTS.md, config.yaml, README.md |
+| `{{FRAMEWORK_BACKEND}}` / `{{FRAMEWORK_FRONTEND}}` | config.yaml |
+| `{{PKG_MANAGER_BACKEND}}` / `{{PKG_MANAGER_FRONTEND}}` | AGENTS.md, config.yaml, Makefile.example, README.md |
+| `{{TEST_FRAMEWORK_BACKEND}}` / `{{TEST_FRAMEWORK_FRONTEND}}` | AGENTS.md, config.yaml, TESTING.md, Makefile.example |
+| `{{LINTER_BACKEND}}` / `{{LINTER_FRONTEND}}` | AGENTS.md, config.yaml, Makefile.example |
+| `{{LINTER_BACKEND_RUFF}}` / `{{LINTER_FRONTEND_ESLINT}}` | .pre-commit-config.yaml |
+
+### Manuais (não-deduzíveis)
+
+| Placeholder | Onde aparece |
+|---|---|
+| `{{PROJECT_DESCRIPTION}}` | config.yaml, README.md |
+| `{{LANG_VERSION}}` | config.yaml |
+| `{{DB}}` | config.yaml |
+| `{{INFRA}}` | config.yaml |
+| `{{MAKE_TARGETS}}` | AGENTS.md |
+| `{{OPTIONAL_REFERENCES}}` | AGENTS.md |
+| `{{PROJECT_CONVENTIONS}}` | AGENTS.md |
+| `{{PROJECT_SPECIFIC_NOTES}}` | config.yaml |
 
 ---
 
@@ -491,7 +545,7 @@ Ver [§7](#7-override-local-via-external_overrides-opt-in) para casos de uso
 
 ### 12.4 Árvore: Projeto-alvo (entidade 3)
 
-Qualquer repo que adota o workflow. Recebe os 7 arquivos na raiz após `--apply`:
+Qualquer repo que adota o workflow. Recebe os canônicos + starters na raiz após `--apply`:
 
 ```
 <projeto-alvo>/
@@ -554,11 +608,11 @@ propaga (após bump de versão e redistribute). Regra prática:
 |---|---|
 | **Skill** | Pacote opencode com `SKILL.md` + scripts + assets; invocada via `/maxdev-workflow-sync` |
 | **Template (assets)** | Arquivos genéricos com placeholders `{{...}}` em `assets/`, usados como fallback pelo `sync-workflow.sh` |
-| **Canônico** | Um dos 7 arquivos que definem o workflow MaxDev (AGENTS.md, dev-workflow.md, 2 scripts, config.yaml, 2 templates) — chaves do array `CANON` em `sync-workflow.sh:52-60` |
+| **Canônico** | Um dos 9 canônicos que definem o workflow MaxDev (AGENTS.md, dev-workflow.md, 2 scripts, config.yaml, 2 templates) — chaves do array `CANON` em `sync-workflow.sh:52-60` |
 | **Placeholder** | Token `{{NOME}}` em templates, substituído manualmente no projeto-alvo (exceto `{{WORKFLOW_VERSION}}`, auto) |
-| **Bootstrap** | Primeiro `--apply` num projeto sem `workflow_version` em `openspec/config.yaml` — copia todos os 7 |
+| **Bootstrap** | Primeiro `--apply` num projeto sem `workflow_version` em `openspec/config.yaml` — copia todos os canônicos + starters |
 | **Drift** | Diferença entre `workflow_version` instalada e `WORKFLOW_VERSION` da skill — detectado por `--check` |
-| **Projeto-alvo** | Repo que adota o workflow MaxDev; recebe os 7 canônicos na raiz |
+| **Projeto-alvo** | Repo que adota o workflow MaxDev; recebe os 9 canônicos + 5 starters na raiz |
 | **Repo da skill** | Repo que distribui o package (`maxsyncai-opencode-skills`, carrega `skills/maxdev-workflow-sync/`) |
 | **Override local** | Diretório apontado via `EXTERNAL_OVERRIDES` (env var) com arquivos canônicos para override (opt-in, avançado). Não é repo — é pasta local. |
 | **Package** | Repo distribuído como plugin opencode (instalado em `~/.cache/opencode/packages/.../`). |
@@ -578,16 +632,22 @@ propaga (após bump de versão e redistribute). Regra prática:
 
 | Versão | Data | Mudanças |
 |---|---|---|
-| 1.0.0 | (preexistente) | Versão inicial da skill: `sync-workflow.sh`, `assets/`, `SKILL.md`, `references/merge-strategy.md` |
-| 1.0.1 | 2026-08-05 | **Fix**: `{{WORKFLOW_VERSION}}` agora auto-substituído em `AGENTS.md` do projeto-alvo (bloco `sed` com guarda `grep -q`). **Fix**: `workflow_version:` duplicado em bootstrap — template `assets/openspec/config.yaml` sem chave hardcoded + lógica `sed`/`append` robusta (não depende mais de `BOOTSTRAP`). **Docs**: `README.md` adicionado (guia de uso humano), seções novas — [§3 Repositórios em jogo](#3-repositórios-em-jogo), [§12 Estrutura dos repositórios](#12-estrutura-dos-repositórios) com diagrama ASCII, [§13 Glossário](#13-glossário), [§14 Changelog](#14-changelog). Cleanup de referências a projetos específicos em `README.md`/`SKILL.md`/`merge-strategy.md`. Sections numeradas. |
-| 1.0.2 | 2026-08-05 | **Fix**: `sync-workflow.sh` reordenado — detecção do repo externo (`git ls-remote` + clone shallow) agora ocorre **antes** da leitura de `WORKFLOW_VERSION` e da detecção de bootstrap/drift. Antes, o script abortava prematuro ou decidia drift com versão errada em installs onde `assets/workflow.version` estava faltante/desatualizada, sem nunca consultar o externo. **Mudança de design**: `workflow.version` AGORA é overridável pelo repo externo (precedência: `EXTERNAL_OVERRIDES/workflow.version` > `assets/workflow.version`). Mensagem de abort mais clara (enumera ambas as fontes tentadas). Log explícito da fonte ativa. |
-| 1.0.3 | 2026-08-06 | **Breaking**: removido auto-clone do repo externo `maxsyncai/openspec-workflow-template` — skill agora é **self-contained** em `assets/`, sem rede. `EXTERNAL_OVERRIDES` mantido como **opt-in local** (env var para diretório local, sem clone remoto). Reduz classe inteira de bugs (ordem de detecção, abort prematuro, contaminação de template repo) e elimina dependência de GitHub remoto. **Cleanup**: `MaxNexa` → `MaxDev` em `assets/scripts/close-change.sh` (2 ocorrências: comentário `:4`, body do chaser PR `:229`). Removidas 2 referências a "Exemplo do maxnexa" em `assets/AGENTS.md` template. README [§7](#7-override-local-via-external_overrides-opt-in) reescrito: era "Repo externo", agora "Override local via EXTERNAL_OVERRIDES (opt-in)". [§3](#3-repositórios-em-jogo), [§8.3](#83-override-local-como-alternativa-aos-assets-avançado), [§12.1](#121-diagrama-package--override-local--projeto-alvo), [§12.3](#123-árvore-override-local-entidade-2-opt-in), [§13](#13-glossário) atualizados. `SKILL.md` e `references/merge-strategy.md` atualizados. |
+| 1.0.0 | (preexistente) | Versão inicial da skill |
+| 1.0.1 | 2026-08-05 | Fix `{{WORKFLOW_VERSION}}` auto-substituição + `workflow_version` duplicado |
+| 1.0.2 | 2026-08-05 | Reordenação do script + repo externo como fonte de `workflow.version` |
+| 1.0.3 | 2026-08-06 | Breaking: remove auto-clone; skill self-contained em `assets/` |
+| 1.0.4 | 2026-08-06 | Sync `close-change.sh` refinado do projeto-fonte |
+| 1.1.0 | 2026-08-06 | **Starters** (`.pre-commit-config.yaml`, `opencode.example.json`, `TESTING.md`, `Makefile.example`). Pós-sync checklist. |
+| 1.2.0 | 2026-08-06 | **Pipeline pós-apply** de 8 etapas guardadas (A1 validação, A2 placeholders deriváveis, A3 opencode.json bootstrap, B2 `.gitignore` markers, B3 sanity check tooling, Hooks auto-install, C1 heurística stack). `.editorconfig`, `README.md`, `.gitignore` delimitado. 8 flags opt-out. |
+| 1.2.1 | 2026-08-06 | Fix B3 detectar serena via `uvx --from` (detecção 2 tiers) |
+| 1.2.2 | 2026-08-06 | Fix B2 `.gitignore` visível no `--check` (drift check + bug falso MODIFY-G) |
+| 1.2.3 | 2026-08-06 | Fix `.gitignore` npm-blacklist — rename p/ `gitignore.template` (escapa packing npm) |
+| 1.2.4 | 2026-08-06 | Fix UX — separação MODE×FORCE: `--check` read-only garantido (ordem-agnóstico), aviso explícito em `--apply` demote |
 
 ---
 
 ## Versão
 
-`workflow.version`: **1.0.3** — bump semver a cada mudança de contrato nos 7
-arquivos canônicos ou no comportamento do `sync-workflow.sh`. Projetos detectam
-drift comparando com `workflow_version`
-em `openspec/config.yaml`.
+`workflow.version`: **1.2.4** — bump semver a cada mudança de contrato nos 9
+canônicos ou no comportamento do `sync-workflow.sh`. Projetos detectam
+drift comparando com `workflow_version` em `openspec/config.yaml`.
