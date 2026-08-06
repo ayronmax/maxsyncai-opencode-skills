@@ -160,7 +160,7 @@ Todas são **guardadas advisory**: falhas nunca abortam o sync, só reportam.
 3. B2: sync .gitignore delimitado (markers — ver "Sync de .gitignore")
 4. A3: em bootstrap (opencode.json inexistente), cria opencode.json do .example já com placeholders substituídos
 5. A1: openspec validate + openspec doctor (skip em CI/bootstrap)
-6. B3: sanity check de tooling (openspec/gh/jq/python/node/pre-commit/basic-memory/serena)
+6. B3: sanity check de tooling (detecção em 2 tiers — binário direto no PATH OU fallback `uvx` para tools como serena invocadas via `uvx --from git+…`)
 7. Hooks: auto-install pre-commit + pre-push (skip em CI, alt managers, sem .git)
 8. C1: heurística advisory de stack (pyproject/package.json; NÃO aplica — só sugere)
 ```

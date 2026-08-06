@@ -564,6 +564,21 @@ post_apply_validate_openspec() {
 }
 
 # ---------- B3 — sanity check de tooling ----------
+#
+# Schema de tool (delimitador § — não aparece em URLs, suporta pipes em hints):
+#   "bin§uvx_ref§uvx_subcmd§hint"
+#     bin       : nome do binário para command -v (detecção direta no PATH)
+#     uvx_ref   : flags uvx para fallback (ex.: "--from git+...") — vazio se não há
+#     uvx_subcmd: subcomando uvx (ex.: "serena") — vazio se uvx_ref é vazio
+#     hint      : instrução de instalação (exibida se ambos tiers falham)
+# Para tools sem fallback uvx: "bin§§§hint" (uvx_ref e uvx_subcmd vazios).
+#
+# Detecção em 2 tiers (primeiro sucesso vence):
+#   1. command -v <bin>                          (rápido — binário direto no PATH)
+#   2. timeout 8 uvx <uvx_ref> <uvx_subcmd> --version  (fallback — tools uvx-wrapped
+#      como serena: 'uvx --from git+https://github.com/oraios/serena serena')
+#      Timeout 8s: cache uvx aquecido responde em ~2s; sem cache pode precisar
+#      fetch git. Opt-out: --no-tools-check. Timeout 124 → warning (cache frio).
 
 sanity_check_tooling() {
   if [[ "$OPT_TOOLS_CHECK" != "true" ]]; then
@@ -577,23 +592,45 @@ sanity_check_tooling() {
   fi
 
   step "B3" "Sanity check de tooling esperado..."
-  local tools=(
-    "openspec:npm install -g openspec"
-    "gh:ver https://github.com/cli/cli#installation"
-    "jq:instale jq via package manager (apt/brew/portable binary)"
-    "python3:https://www.python.org/downloads/"
-    "node:https://nodejs.org/"
-    "pre-commit:uv tool install pre-commit | pip install pre-commit"
-    "basic-memory:uv tool install basic-memory"
-    "serena:uvx --from git+https://github.com/oraios/serena serena"
+  # bin§uvx_ref§uvx_subcmd§hint  (§ é separador; suporta pipes em URLs/hints)
+  local entries=(
+    "openspec§§§npm install -g openspec"
+    "gh§§§ver https://github.com/cli/cli#installation"
+    "jq§§§instale jq via package manager (apt/brew/portable binary)"
+    "python3§§§https://www.python.org/downloads/"
+    "node§§§https://nodejs.org/"
+    "pre-commit§§§uv tool install pre-commit | pip install pre-commit"
+    "basic-memory§§§uv tool install basic-memory"
+    "serena§--from git+https://github.com/oraios/serena§serena§uvx --from git+https://github.com/oraios/serena serena"
   )
-  for entry in "${tools[@]}"; do
-    local bin="${entry%%:*}" hint="${entry#*:}"
+  for entry in "${entries[@]}"; do
+    local bin uvx_ref uvx_subcmd hint rest
+    bin="${entry%%§*}";       rest="${entry#*§}"
+    uvx_ref="${rest%%§*}";   rest="${rest#*§}"
+    uvx_subcmd="${rest%%§*}"; rest="${rest#*§}"
+    hint="$rest"
+
+    # Tier 1: binário direto no PATH
     if command -v "$bin" >/dev/null 2>&1; then
       printf "    ✓ %-15s %s\n" "$bin" "$(command -v "$bin")"
-    else
-      printf "    ✗ %-15s instale: %s\n" "$bin" "$hint"
+      continue
     fi
+
+    # Tier 2: fallback uvx-wrapper (se uvx_ref declarado e uvx existe)
+    if [[ -n "$uvx_ref" ]] && command -v uvx >/dev/null 2>&1; then
+      local uvx_out uvx_exit
+      uvx_out=$(timeout 8 uvx $uvx_ref $uvx_subcmd --version 2>&1 | head -1)
+      uvx_exit=$?
+      if [[ $uvx_exit -eq 0 ]] && [[ -n "$uvx_out" ]]; then
+        printf "    ✓ %-15s via uvx (%s)\n" "$bin" "$uvx_out"
+        continue
+      elif [[ $uvx_exit -eq 124 ]]; then
+        printf "    ⚠ %-15s via uvx (timeout >8s — cache não aquecido?)\n" "$bin"
+        continue
+      fi
+    fi
+
+    printf "    ✗ %-15s instale: %s\n" "$bin" "$hint"
   done
 }
 
