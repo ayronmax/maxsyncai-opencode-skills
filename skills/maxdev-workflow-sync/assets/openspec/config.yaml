@@ -1,0 +1,62 @@
+schema: spec-driven
+
+# Contexto do projeto (exibido ao agente ao criar artefatos)
+# Substitua os placeholders {{...}} pelos valores reais do seu projeto.
+context: |
+  Projeto: {{PROJECT_NAME}} — {{PROJECT_DESCRIPTION}}
+
+  Tech stack:
+    Backend: {{LANG_BACKEND}} {{LANG_VERSION}}, {{FRAMEWORK_BACKEND}}
+    Frontend: {{LANG_FRONTEND}} {{LANG_VERSION}}, {{FRAMEWORK_FRONTEND}}
+    Banco: {{DB}}
+    Infra: {{INFRA}}
+    Package managers: {{PKG_MANAGER_BACKEND}}, {{PKG_MANAGER_FRONTEND}}
+
+  Testes/lint:
+    - {{TEST_FRAMEWORK_BACKEND}} (backend) / {{TEST_FRAMEWORK_FRONTEND}} (frontend)
+    - {{LINTER_BACKEND}} (backend) / {{LINTER_FRONTEND}} (frontend)
+    - Makefile como interface principal: make test, make lint, make check
+
+  Convenções:
+    - Fluxo de trabalho: OpenSpec em 6 fases (explore → propose → apply →
+      verify → PR → archive) conforme `AGENTS.md`
+    - Mudanças de tooling/docs sem mudança de produto declaram skip_specs
+    - Commit: Conventional Commits (pt-BR); nunca direto na main
+    - Push seguro via `./scripts/push-safe.sh` antes do push
+    - Idioma: código em inglês; artefatos OpenSpec e documentação interna em
+      pt-BR; PRs em pt-BR
+
+  # {{PROJECT_SPECIFIC_NOTES}} — adicione aqui qualquer regra específica do
+  # seu projeto (ex.: testes de integração NUNCA paralelizados, async sleep,
+  # etc.). O agente lê esta seção ao criar artefatos.
+
+rules:
+  proposal:
+    - Sempre incluir seção "Why", "What Changes", "Impact" e "Capabilities"
+    - Para mudanças de tooling/docs sem mudança de produto, declarar skip_specs
+      no.change (não inventar specs só para validar)
+    - Indicar arquivos/áreas afetadas no Impact
+  design:
+    - Incluir seção "Decisions" com alternativas consideradas e racional
+    - Incluir "Risks / Trade-offs" com mitigações
+    - Incluir "Migration Plan" quando houver remoção/migração de tooling
+    - Incluir seção "## Open Questions" com formato `Q | Owner | Spike/Research
+      | Status | Resolvido em`. Mesmo que "Nenhuma em aberto" como placeholder
+      (preserva auditabilidade — o instruction do artifact `tasks` do package
+      OpenSpec procura essa seção; não criá-la é bug latente).
+  tasks:
+    - Quebrar em chunks de no máximo 2 horas
+    - "Últimas tasks de cada change (sequência obrigatória): validação (`openspec validate`, `make lint`, `make test-backend-fast`, `push-safe.sh`) → `/opsx-verify-change` → commit + `git push -u origin feature/<change>` → `gh pr create` (base main, head feature, body pt-BR) → GATE 4 (aguardar merge humano) → `./scripts/close-change.sh <change>` após merge. Nunca archivar sem merge confirmado."
+    - >-
+      Antes de submeter tasks, validar Open Questions do design (instruction
+      do artifact tasks do package exige: "check design.md for Open Questions.
+      If any of them would change what gets built, resolve them with the user
+      first"). Não cozinhe suposição implícita no task list.
+    - "Tipo Spike: - [ ] X.Y Spike: <pergunta> → decision em <arquivo>. Spike
+      preserva natureza exploratória (não é task de implementação direta)."
+    - Indicar arquivos afetados por task quando relevante
+
+# Versão do workflow MaxDev instalada (gerenciada por maxdev-workflow-sync).
+# NÃO definir aqui — o sync-workflow.sh adiciona/atualiza esta chave
+# automaticamente com base em assets/workflow.version da skill.
+# workflow_version: <preenchido pela skill maxdev-workflow-sync>

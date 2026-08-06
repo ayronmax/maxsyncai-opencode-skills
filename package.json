@@ -1,0 +1,15 @@
+{
+  "name": "maxsyncai-opencode-skills",
+  "version": "1.0.2",
+  "description": "MaxSyncai opencode skills bundle. Currently ships maxdev-workflow-sync.",
+  "type": "module",
+  "main": ".opencode/plugins/maxsyncai-opencode-skills.js",
+  "files": ["skills", ".opencode", "README.md", "LICENSE"],
+  "license": "MIT",
+  "author": "Alexinaldo Costa",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maxsyncai/maxsyncai-opencode-skills.git"
+  },
+  "keywords": ["opencode", "maxsyncai", "openspec", "maxdev", "workflow", "skill"]
+}
