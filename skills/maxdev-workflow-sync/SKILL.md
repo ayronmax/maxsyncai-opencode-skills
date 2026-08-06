@@ -134,9 +134,11 @@ Modos:
 | Modo | Comando | O que faz |
 |---|---|---|
 | Dry-run (default) | `./sync-workflow.sh` | Gera diff, pede confirmação |
-| Apply | `./sync-workflow.sh --apply` | Aplica sem confirmar + roda pipeline pós-apply |
-| Drift check | `./sync-workflow.sh --check` | Reporta drift, não modifica (read-only) |
-| Force | `./sync-workflow.sh --force` | Sobrescreve mesmo se versão igual |
+| Apply | `./sync-workflow.sh --apply` | Aplica + roda pipeline pós-apply. Se versão instalada == skill: demote p/ check com aviso explícito "use --force para re-aplicar" |
+| Drift check | `./sync-workflow.sh --check` | **Read-only** — reporta drift, não modifica. `--force` após/antes não destrava escrita (warning avisado ao final) |
+| Force | `./sync-workflow.sh --force` | Alias p/ `--apply --force`: aplica mesmo se versão igual, re-aplica starters |
+
+> **Semântica ordem-agnóstica**: `--check --force` ≡ `--force --check` ≡ `--check` (read-only). `MODE` ({dry-run, apply, check}) determina se escreve; `FORCE` ({true, false}) controla se mesmo-igual é re-aplicado. `--check` read-only sempre prevalece sobre `--force`.
 
 Flags opt-out do pipeline pós-apply (todas default ON — adaptativas, advisory):
 
