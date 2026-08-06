@@ -40,7 +40,9 @@ maxsyncai-opencode-skills/              ← repo do package (raiz)
         │   ├── pre-commit-config.yaml  ← canônico (governança block-main/push)
         │   ├── scripts/close-change.sh ← canônico (copia como-is)
         │   ├── scripts/push-safe.sh    ← canônico (copia como-is)
-        │   ├── .gitignore              ← canônico delimitado (markers; re-sync só o bloco)
+        │   ├── gitignore.template      ← canônico delimitado (markers) — source template
+        │   │                             (asset sem dot p/ escapar blacklist npm; destino no
+        │   │                             projeto-alvo é `.gitignore`)
         │   ├── openspec/
         │   │   ├── config.yaml         ← canônico (template + workflow_version)
         │   │   └── templates/
@@ -86,6 +88,8 @@ Comportamento do sync (função B2):
 | Existente com markers desbalanceados | Warning + skip (evita corrupção) |
 
 Nunca clobbera entries custom do usuário fora do bloco delimitado.
+
+> **Sobre o nome do arquivo no asset**: o template vive em `assets/gitignore.template` (sem ponto), **não** em `assets/.gitignore`. Cause: a blacklist default de packing do npm (incl. em `git+https://...` installs) sempre omite `.gitignore`, mesmo que o dir pai esteja em `files:` no `package.json`. Renomear para `gitignore.template` escapa da blacklist. O destino copiado/syncado no projeto-alvo continua sendo `.gitignore` (nome correto). Se um advisory aparecer ("template não encontrado em assets/gitignore.template"), force re-fetch do package: `rm -rf ~/.cache/opencode/packages/maxsyncai*` e reexecute.
 
 ## Reprodutibilidade cross-project
 
