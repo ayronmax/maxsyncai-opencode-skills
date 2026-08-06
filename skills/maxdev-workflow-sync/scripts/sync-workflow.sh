@@ -5,9 +5,14 @@
 #
 # Modos:
 #   ./sync-workflow.sh                # dry-run default (gera diff, pede confirm)
-#   ./sync-workflow.sh --apply        # aplica mudanças sem confirmar
-#   ./sync-workflow.sh --check        # drift check (não modifica, só reporta)
-#   ./sync-workflow.sh --force        # sobrescreve mesmo se versão igual
+#   ./sync-workflow.sh --apply        # aplica mudanças (se versão igual: demote p/ check e avisa)
+#   ./sync-workflow.sh --check        # read-only — reporta drift, não-modifica (--force não destrava)
+#   ./sync-workflow.sh --force        # alias p/ --apply --force: aplica mesmo se versão igual
+#
+# Combinações comuns:
+#   --apply --force                  # alias p/ --force (escrita + re-aplica starters)
+#   --check --force                  # ≡ --check (read-only), warning que --force foi ignorado
+#   --force --check                  # ≡ --check (idem acima — ordem-agnóstico)
 #
 # Flags opt-out (pipeline pós-apply, todas default ON — ver "Pipeline pós-apply"):
 #   --no-install-hooks               # skip auto-install de hooks pre-commit
@@ -112,23 +117,55 @@ PROJECT_ROOT="${PROJECT_ROOT:-$(pwd)}"
 OPENSPEC_CONFIG="$PROJECT_ROOT/openspec/config.yaml"
 
 # ---------- parser de modos + flags ----------
+#
+# MODE = read-write state:  dry-run (default) | apply | check
+# FORCE = modifier:         false (default) | true
+#   - --apply      MODE=apply          FORCE=false
+#   - --check      MODE=check          FORCE=false (sempre read-only, --force não destrava)
+#   - --force      MODE=apply          FORCE=true  (alias: --apply --force)
+#   - --apply --force  idem --force
+#   - --check --force   MODE=check, FORCE=true  → warning "--check é read-only; --force ignorado"
+#                        (ordem dos args não altera semântica — --check vence como read-only)
+#
+# Quando versão instalada == versão da skill:
+#   - MODE=apply  + FORCE=false → demote p/ check com aviso explícito "use --force p/ re-aplicar"
+#   - MODE=apply  + FORCE=true  → aplica normalmente
 
 MODE="dry-run"
+FORCE=false
 # Flags opt-out do pipeline pós-apply (todas default ON — zero friction):
 OPT_INSTALL_HOOKS=true          # auto-install pre-commit hooks
 OPT_INSTALL_HOOKS_FORCE=false   # força install mesmo se guards skipariam (--install-hooks)
 OPT_VALIDATE=true              # openspec validate + doctor
-OPT_TOOLS_CHECK=true            # sanity check tooling
+OPT_TOOLS_CHECK=true            # sanity check de tooling
 OPT_STACK_SUGGEST=true          # heurística advisory de stack
 OPT_GITIGNORE_SYNC=true         # sync delimitado de .gitignore
 OPT_AUTO_OPENCODE=true          # criar opencode.json em bootstrap
 OPT_DERIVABLE_PLACEHOLDERS=true # substituir {{PROJECT_NAME}}/{{PROJECT_ABSOLUTE_PATH}}
 
+WARN_FORCE_IGNORED=false  # avisar ao final se --force foi ignorado por --check
+
 for arg in "$@"; do
   case "$arg" in
-    --apply)      MODE="apply" ;;
-    --check)      MODE="check" ;;
-    --force)      MODE="force" ;;
+    --apply)      MODE="apply"; FORCE=false ;;
+    --check)
+      # --check é read-only. Se --force estava pendente (FORCE=true via args
+      # anteriores), --check.cancela sua intenção de escrita e sinaliza warning
+      # no final — independente da ordem: `--force --check` ≡ `--check --force`.
+      if [[ "$FORCE" == "true" ]]; then
+        WARN_FORCE_IGNORED=true
+        FORCE=false
+      fi
+      MODE="check" ;;
+    --force)
+      # --force = "escrever mesmo se versão igual". Se MODE já é check, --force
+      # não destrava escrita (read-only prevalece) — sinalizar warning no final.
+      if [[ "$MODE" == "check" ]]; then
+        WARN_FORCE_IGNORED=true
+      else
+        MODE="apply"; FORCE=true
+      fi
+      ;;
     --no-install-hooks)            OPT_INSTALL_HOOKS=false ;;
     --install-hooks)               OPT_INSTALL_HOOKS=true; OPT_INSTALL_HOOKS_FORCE=true ;;
     --no-validate)                 OPT_VALIDATE=false ;;
@@ -299,9 +336,16 @@ if [[ "$BOOTSTRAP" == "true" ]]; then
 else
   echo "  ℹ Versão instalada: ${INSTALLED_VERSION:-<none>}"
   echo "  ℹ Versão da skill:    $WORKFLOW_VERSION"
-  if [[ "$INSTALLED_VERSION" == "$WORKFLOW_VERSION" && "$MODE" != "force" ]]; then
-    echo "  ✓ Mesma versão — drift check apenas (use --force para re-aplicar)."
-    MODE="check"
+  # Versão igual: --apply (sem --force) é demoted para --check com aviso explícito.
+  # --apply --force / --force: aplica normalmente (FORCE=true não cai neste branch).
+  # --check / --check --force: permanece read-only (FORCE não destrava escrita).
+  if [[ "$INSTALLED_VERSION" == "$WORKFLOW_VERSION" && "$FORCE" != "true" ]]; then
+    if [[ "$MODE" == "apply" ]]; then
+      echo "  ℹ Versão igual — drift check apenas. Para re-aplicar use --force."
+      MODE="check"
+    else
+      echo "  ✓ Mesma versão — drift check apenas (use --force para re-aplicar)."
+    fi
   fi
 fi
 
@@ -340,12 +384,13 @@ for dst in "${!STARTERS[@]}"; do
     src="$EXTERNAL_OVERRIDES/$dst"
   fi
   full_dst="$PROJECT_ROOT/$dst"
-  if [[ ! -f "$full_dst" ]]; then
-    STARTER_ADDS+=("$dst")
-  elif [[ "$MODE" == "force" ]]; then
-    STARTER_FORCES+=("$dst")
-  else
-    STARTER_SKIPS+=("$dst")
+if [[ ! -f "$full_dst" ]]; then
+     STARTER_ADDS+=("$dst")
+   elif [[ "$FORCE" == "true" && "$MODE" == "apply" ]]; then
+     # --force (ou --apply --force): sobrescreve mesmo starter existente
+     STARTER_FORCES+=("$dst")
+   else
+     STARTER_SKIPS+=("$dst")
   fi
 done
 
@@ -398,6 +443,7 @@ fi
 
 if [[ $TOTAL_CHANGES -eq 0 ]]; then
   echo "  ✓ Nenhum drift de arquivos. Workflow sincronizado."
+  [[ "$WARN_FORCE_IGNORED" == "true" ]] && warn "--check é read-only; --force ignorado. Use --force (sem --check) para re-aplicar."
   exit 0
 fi
 
@@ -423,6 +469,7 @@ if [[ "$MODE" == "check" ]]; then
   echo
   echo "ℹ Modo --check: nenhum arquivo modificado. Para aplicar, rode:"
   echo "    $0 --apply"
+  [[ "$WARN_FORCE_IGNORED" == "true" ]] && warn "--check é read-only; --force ignorado. Use --force (sem --check) para re-aplicar."
   exit 0
 fi
 
@@ -881,8 +928,11 @@ suggest_stack_placeholders() {
 }
 
 # ---------- executa pipeline pós-apply (somente em apply/force) ----------
+# Após MODE x FORCE separation: pipeline pós-apply só roda em MODE=apply.
+# --check (--force ignorado) → read-only, não roda pipeline.
+# --apply --force / --force (--apply + FORCE=true) → roda normalmente.
 
-if [[ "$MODE" == "apply" || "$MODE" == "force" ]]; then
+if [[ "$MODE" == "apply" ]]; then
   step "B2" "Sync .gitignore delimitado..."
   sync_gitignore_delimited
 
