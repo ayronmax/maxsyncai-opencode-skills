@@ -27,12 +27,12 @@ repos:
       - id: check-added-large-files
 
   # {{LINTER_BACKEND_RUFF}} — descomente se backend for Python
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.2
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
+  # - repo: https://github.com/astral-sh/ruff-pre-commit
+  #   rev: v0.9.2
+  #   hooks:
+  #     - id: ruff
+  #       args: [--fix]
+  #     - id: ruff-format
   # {{/LINTER_BACKEND_RUFF}}
 
   # {{LINTER_FRONTEND_ESLINT}} — descomente/adapte se frontend for TS/JS
