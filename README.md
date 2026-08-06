@@ -47,5 +47,5 @@ git tag vX.Y.Z && git push --tags
 ## Repositórios relacionados
 
 - [`maxsyncai/openspec-workflow-template`](https://github.com/maxsyncai/openspec-workflow-template)
-  — repo canônico de **overrides** (opcional) para os 7 arquivos consumidos pela
-  skill `maxdev-workflow-sync`.
+  — repo canônico de **overrides** (opcional) para os 9 canônicos + 5 starters
+  consumidos pela skill `maxdev-workflow-sync`.
