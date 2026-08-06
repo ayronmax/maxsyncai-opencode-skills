@@ -191,6 +191,77 @@ GITIGNORE_BEGIN="# >>> maxdev-workflow-sync >>>"
 GITIGNORE_END="# <<< maxdev-workflow-sync <<<"
 GITIGNORE_TEMPLATE="$ASSETS/.gitignore"
 
+# ---------- B2 analyze_gitignore_state() ----------
+# Read-only: classifica estado do .gitignore sem tocar arquivos. Usada tanto
+# no drift check (computa diffs) quanto no apply (sync_gitignore_delimited).
+# Casos no stdout para captura via $():
+#   add        : .gitignore não existe → será criado com markers + entries
+#   append     : .gitignore existe sem markers → append do bloco delimitado
+#   update     : .gitignore existe com markers par; bloco entre markers != template
+#   up-to-date : .gitignore existe com markers par; bloco já igual ao template
+#   unbalanced : markers desbalanceados (begin != end) → warning, não tocar
+#   skip-noopt : --no-gitignore-sync ativo
+#   skip-notpl : template não encontrado em assets/ override
+#   skip-empty  : template não tem markers delimitados (skill corrompida?)
+
+analyze_gitignore_state() {
+  local dst="$PROJECT_ROOT/.gitignore"
+  local src="$GITIGNORE_TEMPLATE"
+  if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/.gitignore" ]]; then
+    src="$EXTERNAL_OVERRIDES/.gitignore"
+  fi
+
+  if [[ "$OPT_GITIGNORE_SYNC" != "true" ]]; then
+    echo "skip-noopt"; return
+  fi
+  if [[ ! -f "$src" ]]; then
+    echo "skip-notpl"; return
+  fi
+
+  # Caso 1: inexistente → add
+  if [[ ! -f "$dst" ]]; then
+    echo "add"; return
+  fi
+
+  # Lê a seção delimitada do template ({{WORKFLOW_VERSION}} deixado literal —
+  # comparado com o destino que também pode ter placeholder se recém-criado)
+  local template_section
+  template_section=$(awk "/^${GITIGNORE_BEGIN//\//\\/}/,/^${GITIGNORE_END//\//\\/}/" "$src")
+  if [[ -z "$template_section" ]]; then
+    echo "skip-empty"; return
+  fi
+  # Normaliza {{WORKFLOW_VERSION}} em ambos (template e destino) ANTES de
+  # comparar, para evitar falso "update" quando o apply-case-add criou o
+  # .gitignore com placeholder literal (sem substituir). Normaliza só para
+  # a comparação — o sync aplica a versão real ao escrever.
+  local template_norm current_norm
+  template_norm="${template_section//\{\{WORKFLOW_VERSION\}\}/$WORKFLOW_VERSION}"
+
+  # Caso 2: existe sem markers → append
+  if ! grep -q -F "$GITIGNORE_BEGIN" "$dst"; then
+    echo "append"; return
+  fi
+
+  # Caso 3/4: existe com markers. Valida par begin↔end.
+  local count_begin count_end
+  count_begin=$(grep -c -F "$GITIGNORE_BEGIN" "$dst" || true)
+  count_end=$(grep -c -F "$GITIGNORE_END" "$dst" || true)
+  if [[ "$count_begin" -ne "$count_end" ]]; then
+    echo "unbalanced"; return
+  fi
+
+  # Extrai o bloco atual entre markers do destino e compara com template
+  # (ambos normalizados para $WORKFLOW_VERSION — cobre caso add que copia
+  # literal e caso update que já tem versão substituída).
+  local current_section
+  current_section=$(awk "/^${GITIGNORE_BEGIN//\//\\/}/,/^${GITIGNORE_END//\//\\/}/" "$dst")
+  current_norm="${current_section//\{\{WORKFLOW_VERSION\}\}/$WORKFLOW_VERSION}"
+  if [[ "$current_norm" == "$template_norm" ]]; then
+    echo "up-to-date"; return
+  fi
+  echo "update"; return
+}
+
 # ---------- detecta estado ----------
 
 step "1" "Analisando estado do projeto em $PROJECT_ROOT..."
@@ -257,14 +328,51 @@ for dst in "${!STARTERS[@]}"; do
   fi
 done
 
-TOTAL_CHANGES=$(( ${#CHANGES[@]} + ${#STARTER_ADDS[@]} + ${#STARTER_FORCES[@]} ))
+# ---------- B2 preview (.gitignore drift check) ----------
+# analyze_gitignore_state() é read-only: classifica sem tocar arquivos.
+# Casos relevantes para o drift report:
+#   add        → conta como "ADD-G .gitignore"
+#   append     → conta como "ADD-G .gitignore (append delimitado)"
+#   update     → conta como "MODIFY-G .gitignore (bloco entre markers)"
+#   unbalanced → warning (não action, mas avisa problema)
+#   up-to-date / skip-* → sem relato
 
-if [[ $TOTAL_CHANGES -eq 0 ]]; then
+GITIGNORE_DRIFT=""
+GITWARNING=""
+if [[ -f "$ASSETS/.gitignore" ]]; then
+  _gstate=$(analyze_gitignore_state)
+  case "$_gstate" in
+    add)      GITIGNORE_DRIFT="ADD-G .gitignore  (markers + entries; novo)" ;;
+    append)   GITIGNORE_DRIFT="ADD-G .gitignore  (append delimitado — preserva custom)" ;;
+    update)   GITIGNORE_DRIFT="MODIFY-G .gitignore  (bloco entre markers; preserva custom)" ;;
+    unbalanced) GITWARNING=".gitignore markers desbalanceados (skip ao aplicar — antecorruption)" ;;
+    up-to-date) ;;
+    skip-noopt) ;;
+    skip-notpl) ;;
+    skip-empty) ;;
+  esac
+fi
+
+GITIGNORE_COUNT=0
+[[ -n "$GITIGNORE_DRIFT" ]] && GITIGNORE_COUNT=1
+
+TOTAL_CHANGES=$(( ${#CHANGES[@]} + ${#STARTER_ADDS[@]} + ${#STARTER_FORCES[@]} + GITIGNORE_COUNT ))
+
+if [[ $TOTAL_CHANGES -eq 0 && -z "$GITWARNING" ]]; then
   echo "  ✓ Nenhum drift detectado. Workflow sincronizado."
   if [[ ${#STARTER_SKIPS[@]} -gt 0 ]]; then
     echo "  ℹ Starters preservados (use --force para sobrescrever):"
     for s in "${STARTER_SKIPS[@]}"; do echo "    - $s"; done
   fi
+  exit 0
+fi
+
+if [[ -n "$GITWARNING" ]]; then
+  warn "$GITWARNING"
+fi
+
+if [[ $TOTAL_CHANGES -eq 0 ]]; then
+  echo "  ✓ Nenhum drift de arquivos. Workflow sincronizado."
   exit 0
 fi
 
@@ -278,6 +386,7 @@ done
 for dst in "${STARTER_FORCES[@]}"; do
   echo "    - MODIFY-S $dst  (starter sobrescrito --force)"
 done
+[[ -n "$GITIGNORE_DRIFT" ]] && echo "    - $GITIGNORE_DRIFT"
 if [[ ${#STARTER_SKIPS[@]} -gt 0 ]]; then
   echo "  ℹ Starters preservados (use --force para sobrescrever):"
   for s in "${STARTER_SKIPS[@]}"; do echo "    - $s"; done
@@ -413,92 +522,92 @@ if [[ "$OPT_DERIVABLE_PLACEHOLDERS" == "true" ]]; then
 fi
 
 # ---------- B2 — sync delimitado de .gitignore ----------
+#
+# Dois componentes:
+#   analyze_gitignore_state()  — read-only: classifica estado do .gitignore
+#                                (definida em "B2 constants" acima para uso no drift check)
+#   sync_gitignore_delimited() — apply: executa a ação correspondente
 
 sync_gitignore_delimited() {
   local dst="$PROJECT_ROOT/.gitignore"
   local src="$GITIGNORE_TEMPLATE"
-
-  # Override por EXTERNAL_OVERRIDES se setado e o arquivo existir lá
   if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/.gitignore" ]]; then
     src="$EXTERNAL_OVERRIDES/.gitignore"
   fi
 
-  if [[ "$OPT_GITIGNORE_SYNC" != "true" ]]; then
-    advisory "B2 .gitignore sync: skipada por --no-gitignore-sync"
-    return
-  fi
+  local state
+  state=$(analyze_gitignore_state)
 
-  if [[ ! -f "$src" ]]; then
-    advisory "B2 .gitignore: template não encontrado em $src"
-    return
-  fi
-
-  # Caso 1: .gitignore inexistente → cria com a seção delimitada do template
-  if [[ ! -f "$dst" ]]; then
-    cp "$src" "$dst"
-    echo "  ✓ .gitignore criado com seção delimitada (markers)"
-    return
-  fi
-
-  # Lê o template (bloco entre markers) — extrai só a seção delimitada
-  local template_section
-  template_section=$(awk "/^${GITIGNORE_BEGIN//\//\\/}/,/^${GITIGNORE_END//\//\\/}/" "$src")
-  if [[ -z "$template_section" ]]; then
-    warn "B2 .gitignore: template sem markers delimitados — skipada (preserva custom)"
-    return
-  fi
-
-  # Substitui {{WORKFLOW_VERSION}} na seção do template antes de merge
-  template_section="${template_section//\{\{WORKFLOW_VERSION\}\}/$WORKFLOW_VERSION}"
-
-  # Caso 2: .gitignore existente sem markers → append da seção delimitada
-  if ! grep -q -F "$GITIGNORE_BEGIN" "$dst"; then
-    {
-      echo ""
-      echo "$template_section"
-    } >> "$dst"
-    echo "  ✓ .gitignore: seção delimitada appended (entries custom preservadas acima)"
-    return
-  fi
-
-  # Caso 3: .gitignore existente com markers — validação par (begin ↔ end)
-  local count_begin count_end
-  count_begin=$(grep -c -F "$GITIGNORE_BEGIN" "$dst" || true)
-  count_end=$(grep -c -F "$GITIGNORE_END" "$dst" || true)
-  if [[ "$count_begin" -ne "$count_end" ]]; then
-    warn "B2 .gitignore: markers desbalanceados (begin=$count_begin end=$count_end) — skipada para evitar corrupção"
-    warn "    remova manualmente os markers restantes e rode novamente"
-    return
-  fi
-
-  # Substitui só o bloco entre markers (preserva acima/abaixo)
-  # Estratégia: awk divide em before/between/after; recompõe com novo bloco.
-  local tmp
-  tmp=$(mktemp)
-  awk -v begin="$GITIGNORE_BEGIN" -v end="$GITIGNORE_END" \
-      -v new="$template_section" '
-    BEGIN {state="before"; printed_new=0}
-    $0 == begin && state=="before" {
-      state="inside"; next
-    }
-    $0 == end && state=="inside" {
-      if (!printed_new) { print new; printed_new=1 }
-      state="after"; next
-    }
-    state=="inside" { next }  # descarta antigo conteúdo
-    { print }
-    END {
-      if (!printed_new && state!="inside") print new
-    }
-  ' "$dst" > "$tmp"
-
-  if [[ -s "$tmp" ]]; then
-    mv "$tmp" "$dst"
-    echo "  ✓ .gitignore: bloco entre markers atualizado (entries custom preservadas)"
-  else
-    rm -f "$tmp"
-    warn "B2 .gitignore: awk resultou vazio — rollback preservou o original"
-  fi
+  case "$state" in
+    skip-noopt)
+      advisory "B2 .gitignore sync: skipada por --no-gitignore-sync"
+      return ;;
+    skip-notpl)
+      advisory "B2 .gitignore: template não encontrado em $src"
+      return ;;
+    skip-empty)
+      warn "B2 .gitignore: template sem markers delimitados — skipada (preserva custom)"
+      return ;;
+    up-to-date)
+      echo "  ✓ .gitignore: bloco entre markers já está sincronizado"
+      return ;;
+    add)
+      # Substitui {{WORKFLOW_VERSION}} no template antes de copiar — caso
+      # contrário, 2º --check reportaria MODIFY-G false positive (analyze
+      # compara com placeholder já substituído).
+      sed "s|{{WORKFLOW_VERSION}}|$WORKFLOW_VERSION|g" "$src" > "$dst"
+      echo "  ✓ .gitignore criado com seção delimitada (markers)"
+      return ;;
+    append)
+      local template_section
+      template_section=$(awk "/^${GITIGNORE_BEGIN//\//\\/}/,/^${GITIGNORE_END//\//\\/}/" "$src")
+      template_section="${template_section//\{\{WORKFLOW_VERSION\}\}/$WORKFLOW_VERSION}"
+      {
+        echo ""
+        echo "$template_section"
+      } >> "$dst"
+      echo "  ✓ .gitignore: seção delimitada appended (entries custom preservadas acima)"
+      return ;;
+    unbalanced)
+      local count_begin count_end
+      count_begin=$(grep -c -F "$GITIGNORE_BEGIN" "$dst" || true)
+      count_end=$(grep -c -F "$GITIGNORE_END" "$dst" || true)
+      warn "B2 .gitignore: markers desbalanceados (begin=$count_begin end=$count_end) — skipada para evitar corrupção"
+      warn "    remova manualmente os markers restantes e rode novamente"
+      return ;;
+    update)
+      local template_section tmp
+      template_section=$(awk "/^${GITIGNORE_BEGIN//\//\\/}/,/^${GITIGNORE_END//\//\\/}/" "$src")
+      template_section="${template_section//\{\{WORKFLOW_VERSION\}\}/$WORKFLOW_VERSION}"
+      tmp=$(mktemp)
+      awk -v begin="$GITIGNORE_BEGIN" -v end="$GITIGNORE_END" \
+          -v new="$template_section" '
+        BEGIN {state="before"; printed_new=0}
+        $0 == begin && state=="before" {
+          state="inside"; next
+        }
+        $0 == end && state=="inside" {
+          if (!printed_new) { print new; printed_new=1 }
+          state="after"; next
+        }
+        state=="inside" { next }
+        { print }
+        END {
+          if (!printed_new && state!="inside") print new
+        }
+      ' "$dst" > "$tmp"
+      if [[ -s "$tmp" ]]; then
+        mv "$tmp" "$dst"
+        echo "  ✓ .gitignore: bloco entre markers atualizado (entries custom preservadas)"
+      else
+        rm -f "$tmp"
+        warn "B2 .gitignore: awk resultou vazio — rollback preservou o original"
+      fi
+      return ;;
+    *)
+      warn "B2 .gitignore: estado desconhecido '$state' — skipada"
+      return ;;
+  esac
 }
 
 # ---------- A3 — criar opencode.json em bootstrap ----------

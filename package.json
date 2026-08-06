@@ -1,6 +1,6 @@
 {
   "name": "maxsyncai-opencode-skills",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "MaxSyncai opencode skills bundle. Currently ships maxdev-workflow-sync.",
   "type": "module",
   "main": ".opencode/plugins/maxsyncai-opencode-skills.js",
