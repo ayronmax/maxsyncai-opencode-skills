@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # close-change.sh — Orquestra o closeout de uma change OpenSpec após o merge
-# do PR de implementação (GATE 4). Implementa o GATE 5 do fluxo MaxNexa:
+# do PR de implementação (GATE 4). Implementa o GATE 5 do fluxo MaxDev:
 # "Closeout verde antes da próxima change".
 #
 # Pré-requisitos:
@@ -226,7 +226,7 @@ git push -u origin "$CHASER" 2>&1 | rtk tail -3 || abort "push chaser falhou"
 
 gh pr create --base main --head "$CHASER" \
   --title "chore(openspec): arquiva $CHANGE" \
-  --body "Closeout da change \`$CHANGE\` — mergeia deltas em openspec/specs/ e move a change para archive/. Orquestrado por \`./scripts/close-change.sh\` (GATE 5 do fluxo MaxNexa)." \
+  --body "Closeout da change \`$CHANGE\` — mergeia deltas em openspec/specs/ e move a change para archive/. Orquestrado por \`./scripts/close-change.sh\` (GATE 5 do fluxo MaxDev)." \
   || abort "gh pr create chaser falhou"
 
 echo
