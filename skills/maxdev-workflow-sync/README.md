@@ -13,7 +13,7 @@ repositório. Idempotente, reprodutível, copia só o **contrato** (não skills 
 3. [Pré-requisitos](#4-pré-requisitos)
 4. [Modos & flags](#5-modos--flags)
 5. [Cenários de uso](#6-cenários-de-uso)
-6. [Repo externo `maxsyncai/openspec-workflow-template`](#7-repo-externo-maxsyncaiopenspec-workflow-template-opcional-override)
+6. [Override local via `EXTERNAL_OVERRIDES` (opt-in)](#7-override-local-via-external_overrides-opt-in)
 7. [Autoria & manutenção dos templates](#8-autoria--manutenção-dos-templates)
 8. [Placeholders a substituir no bootstrap](#9-placeholders-a-substituir-no-bootstrap)
 9. [Verificação pós-sync](#10-verificação-pós-sync)
@@ -52,18 +52,18 @@ dúvida — por isso o panorama antes de detalhar:
 
 | # | Entidade | Onde vive | Função | Obrigatória? |
 |---|---|---|---|---|
-| 1 | **Repo da skill** | Repo que distribui o package (`maxsyncai-opencode-skills`, carrega `skills/maxdev-workflow-sync/`) | Fonte canônica da skill: `SKILL.md`, `scripts/sync-workflow.sh`, `assets/` (fallback embutido) | Sim |
-| 2 | **Repo externo** | GitHub `maxsyncai/openspec-workflow-template` | Centraliza overrides dos 7 canônicos para múltiplos projetos (hot-update sem bump de package) | Não (opcional) |
+| 1 | **Repo da skill (package)** | Repo que distribui o package (`maxsyncai-opencode-skills`, carrega `skills/maxdev-workflow-sync/`) | Fonte canônica da skill: `SKILL.md`, `scripts/sync-workflow.sh`, `assets/` (templates embutidos como defaults) | Sim |
+| 2 | **Override local** (opt-in) | Diretório local apontado via `EXTERNAL_OVERRIDES` (env var) | Override dos 7 canônicos para forks/air-gapped/testes. Default: não usado — skill é self-contained em `assets/` | Não (opcional, avançado) |
 | 3 | **Projeto-alvo** | Qualquer repo que adota o workflow MaxDev | Recebe os 7 canônicos na raiz após `--apply` | Sim (é o destino) |
 
 **Relação**: o script `sync-workflow.sh` (entidade 1) lê da entidade 2 (se
-acessível) ou do `assets/` embutido (fallback), e copia os 7 arquivos para a raiz
-da entidade 3.
+explicitamente setado via env) ou do `assets/` embutido (default), e copia os 7
+arquivos para a raiz da entidade 3.
 
-**Um mesmo repo pode ser 1 e 3 ao mesmo tempo**: o repo que distribui a skill
-tipicamente também a aplica em si mesmo (raiz tem arquivos VIVOS, e
-`skills/maxdev-workflow-sync/assets/` no package tem TEMPLATES — but coexistem
-em repos distintos: package = skill, projeto-alvo = arquivos vivos). Ver
+**Dois repos distintos por design**: o package (entidade 1) e o projeto-alvo
+(entidade 3) vivem em repos separados desde que a skill virou plugin opencode.
+`skills/maxdev-workflow-sync/assets/` no package tem TEMPLATES; a raiz do
+projeto-alvo tem arquivos VIVOS — não coexistem no mesmo git. Ver
 [§12.5 Dualidade: vivo vs template](#125-dualidade-vivo-vs-template).
 
 ---
@@ -190,153 +190,81 @@ projeto-alvo.
 
 ---
 
-## 7. Repo externo `maxsyncai/openspec-workflow-template` (opcional, override)
+## 7. Override local via `EXTERNAL_OVERRIDES` (opt-in)
 
-A skill tem **defaults embutidos** em `assets/`. O repo externo
-`maxsyncai/openspec-workflow-template` é uma **fonte opcional de override**.
+A skill é **self-contained** — todos os 7 arquivos canônicos vivem em `assets/`
+dentro do package. Não há dependência de repo externo nem auto-clone via rede.
 
-> **URL hardcoded** em `sync-workflow.sh:88`:
-> `https://github.com/maxsyncai/openspec-workflow-template`. Não é configurável
-> via flag/env. Para apontar outro remote, edite o script ou use
-> `EXTERNAL_OVERRIDES` local (caminho C abaixo).
+Para casos avançados (fork privado do template, ambientes air-gapped, testes
+locais antes de bump de package), você pode **override localmente** apontando
+uma pasta via env var:
+
+```bash
+EXTERNAL_OVERRIDES=/path/para/meu-template-local \
+  bash <skill_dir>/scripts/sync-workflow.sh --apply
+```
 
 ### 7.1 Como funciona
 
-1. O script tenta `git ls-remote` em
-   `https://github.com/maxsyncai/openspec-workflow-template`
-   (`sync-workflow.sh:88`).
-2. **Se o repo existir e for acessível**, clona shallow em
-   `/tmp/openspec-workflow-template-$$` e usa os arquivos dele como origem
-   para os 7 arquivos canônicos.
-3. **Se o repo não existir ou não for acessível**, usa os defaults em `assets/`.
-4. O clone é removido ao final do run (`sync-workflow.sh:185-187`).
+1. O script verifica se `EXTERNAL_OVERRIDES` está setado e aponta para
+   diretório válido (`sync-workflow.sh:40-44`). Se não setado → usa `assets/`.
+2. Para cada arquivo canônico, se `$EXTERNAL_OVERRIDES/<arquivo>` existir,
+   usa ele como origem; senão cai em `assets/<arquivo>` (override **per-file**,
+   não tudo-ou-nada).
+3. `workflow.version` segue a mesma precedência: se
+   `$EXTERNAL_OVERRIDES/workflow.version` existir, override; senão
+   `assets/workflow.version` (default da skill instalada).
 
-### 7.2 Override é por-arquivo, não tudo-ou-nada
-
-A lógica em `sync-workflow.sh:104` é **per-file**:
-
-```bash
-if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/$dst" ]]; then
-  src="$EXTERNAL_OVERRIDES/$dst"   # override só deste arquivo
-fi
-```
-
-Consequências práticas:
-
-- O repo externo pode ser **parcial** — publicar só `AGENTS.md` sobrepõe só
-  ele; os outros 6 caem para `assets/`.
-- Para override total, o repo precisa dos **7 arquivos** do array `CANON`
-  (ver [§7.4](#74-estrutura-do-repo-externo-override-total)).
-
-### 7.3 `workflow.version` é overridável
-
-A partir da v1.0.2, `workflow.version` **é overridável** pelo repo externo. O
-script (`sync-workflow.sh`) lê `WORKFLOW_VERSION` na seguinte precedência:
-
-1. `$EXTERNAL_OVERRIDES/workflow.version` (se existir)
-2. `$ASSETS/workflow.version` (fallback que sempre existe na skill instalada)
-
-Antes da v1.0.2, o script lia `WORKFLOW_VERSION` de `assets/` **antes** de
-detectar o repo externo — causing abort prematuro em installs onde `assets/`
-estava faltante ou decision de drift com versão errada. A v1.0.2 inverte:
-detecta a fonte primeiro, depois lê a versão da fonte efetiva.
-
-**Implicações**:
-
-- O externo PODE publicar `workflow.version` para governar versão de múltiplos
-  projetos sem bump de skill instalada.
-- Se o externo não publicar `workflow.version` (default), cai em `assets/`.
-- Projetos detectam drift comparando `workflow_version` vs o `WORKFLOW_VERSION`
-  efetivo (que pode vir do externo se ele publicar).
-
-### 7.4 Estrutura do repo externo (override total)
-
-Para que o externo sobreponha **todos** os 7 arquivos, ele deve conter exatamente
-a árvore abaixo (espelha as chaves `dst` do array `CANON` em `sync-workflow.sh:52-60`):
+### 7.2 Estrutura esperada do diretório de override
 
 ```
-openspec-workflow-template/
-├── workflow.version         ← opcional; se publicado, override assets/workflow.version (v1.0.2+)
-├── AGENTS.md
-├── dev-workflow.md
+meu-template-local/
+├── workflow.version         ← opcional; se publicado, override assets/workflow.version
+├── AGENTS.md                ← opcional (se ausente, cai em assets/)
+├── dev-workflow.md          ← idem
 ├── scripts/
-│   ├── close-change.sh
-│   └── push-safe.sh
+│   ├── close-change.sh      ← idem
+│   └── push-safe.sh         ← idem
 └── openspec/
-    ├── config.yaml
+    ├── config.yaml          ← idem
     └── templates/
         ├── explore-brief.md
         └── design.md
 ```
 
-A partir da v1.0.2, incluir `workflow.version` no externo faz ele override
-`assets/workflow.version` (ver [§7.3](#73-workflowversion-é-overridável)).
-Se não incluir, cai no fallback `assets/`.
-
-Atalho para gerar a árvore a partir dos `assets/` locais:
+Atalho para gerar a árvore a partir de `assets/`:
 
 ```bash
-# dentro do repo externo, a partir da pasta assets/ da skill
-cd openspec-workflow-template
-cp <skill>/assets/AGENTS.md .
-cp <skill>/assets/dev-workflow.md .
-cp <skill>/assets/scripts/close-change.sh scripts/
-cp <skill>/assets/scripts/push-safe.sh   scripts/
-cp <skill>/assets/openspec/config.yaml            openspec/
-cp <skill>/assets/openspec/templates/*.md        openspec/templates/
-git add -A && git commit -m "chore: sync from maxdev-workflow-sync vX.Y.Z"
+mkdir meu-template-local && cd meu-template-local
+mkdir -p scripts openspec/templates
+SKILL_DIR=<skill_dir>/skills/maxdev-workflow-sync
+cp $SKILL_DIR/assets/AGENTS.md $SKILL_DIR/assets/dev-workflow.md .
+cp $SKILL_DIR/assets/scripts/*.sh scripts/
+cp $SKILL_DIR/assets/openspec/config.yaml openspec/
+cp $SKILL_DIR/assets/openspec/templates/*.md openspec/templates/
+cp $SKILL_DIR/assets/workflow.version .
+# ajuste conforme necessário, comite no seu fork privado
 ```
 
-### 7.5 O que fazer com este repo
-
-Você tem **três caminhos**, dependendo do seu papel:
-
-#### A. Não fazer nada (default)
-
-Se você só quer **usar** o workflow: ignore. A skill usa defaults embutidos se o
-repo externo não existir ou não for acessível. Funciona offline.
-
-#### B. Criar o repo se você governa o template MaxSyncai
-
-Se quer centralizar atualizações do workflow para múltiplos
-projetos, **crie** `github.com/maxsyncai/openspec-workflow-template` com a
-árvore acima. A partir daí, toda skill `maxdev-workflow-sync` rodada em
-qualquer projeto (com rede + acesso) puxa do externo, em vez de `assets/`.
-
-Cuidado: como `workflow.version` não é overridável, bump de versão ainda
-precisa ser feito **na skill** (package distribuído). O externo troca só o
-conteúdo dos 7 arquivos — a versão que aparece em `openspec/config.yaml` dos
-projetos vem da skill, não do template.
-
-#### C. Override local sem GitHub
-
-Defina `EXTERNAL_OVERRIDES` apontando para um diretório local:
-
-```bash
-EXTERNAL_OVERRIDES=/path/para/meu-template \
-  bash <skill_dir>/scripts/sync-workflow.sh --apply
-```
-
-Útil para: iterar num template local antes de subir para o GitHub; ambientes
-air-gapped; apontar um fork privado diferente do
-`maxsyncai/openspec-workflow-template`. Mesmas regras per-file se aplicam.
-
-### 7.6 Ordem de precedência (por arquivo)
+### 7.3 Ordem de precedência (por arquivo)
 
 ```
-1. EXTERNAL_OVERRIDES (env, explícito)            ← mais forte
-2. maxsyncai/openspec-workflow-template (GitHub)  ← se acessível
-3. assets/ embutidos na skill                     ← fallback
+1. EXTERNAL_OVERRIDES/<arquivo>  (env, explícito, se existir)  ← mais forte
+2. assets/<arquivo>              (default embutido no package)  ← fallback que sempre existe
 
-   (workflow.version: precedência idêntica — 1 > 2 > 3, desde v1.0.2)
+   (workflow.version: precedência idêntica — 1 > 2)
 ```
 
-### 7.7 Quando NÃO contar com o repo externo
+### 7.4 Quando NÃO usar override
 
-- Ambientes **offline / air-gapped**: a skill silenciosamente cai em `assets/`.
-- Projetos fora da MaxSyncai: o repo MaxSyncai pode não ser relevante —
-  defina `EXTERNAL_OVERRIDES=""` para suprimir a tentativa de clone, ou ignore
-  (se o repo for privado e seu token não acessar, o fallback acontece).
+- **Default**: não defina `EXTERNAL_OVERRIDES`. A skill funciona offline,
+  sem rede, sem depender de GitHub. Único requisito: ter o package instalado
+  via `~/.config/opencode/opencode.jsonc`.
+- **Bump de versão**: faça no package (`assets/workflow.version` + commit + tag),
+  não via override. Override é para experimentação local, não para
+  distribuir versão — para distribuir, bump o package.
+- **Atualizar conteúdo dos 7 canônicos**: edite `assets/` no repo do package,
+  commit, push, tag. Projetos detectam drift no próximo `--check`.
 
 ---
 
@@ -386,13 +314,12 @@ do projeto — o da raiz do projeto é derivado do template (já com placeholder
 substituídos pelos valores reais do projeto), o de `assets/` é o template
 genérico. Ver [§12.5 Dualidade](#125-dualidade-vivo-vs-template).
 
-### 8.3 Repo externo como alternativa aos `assets/`
+### 8.3 Override local como alternativa aos `assets/` (avançado)
 
-Em vez de manter templates só em `assets/` (que exige redistribuir a skill para
-qualquer ajuste), você pode publicá-los em `maxsyncai/openspec-workflow-template`
-(ver [§7](#7-repo-externo-maxsyncaiopenspec-workflow-template-opcional-override)).
-A skill puxa do externo se acessível; senão, cai em
-`assets/`. Útil quando quer centralizar evolução sem bump de package.
+Para experimentação local (sem redistribuir package), use
+`EXTERNAL_OVERRIDES` apontando para um diretório local com os 7 canônicos.
+A skill puxa dele se setado; senão, cai em `assets/`. Ver
+[§7 Override local](#7-override-local-via-external_overrides-opt-in).
 
 ---
 
@@ -459,51 +386,47 @@ precisar preservar seções customizadas. Veja `references/merge-strategy.md`.
 
 ## 12. Estrutura dos repositórios
 
-### 12.1 Diagrama dos 3 repositórios
+### 12.1 Diagrama: package + override local + projeto-alvo
 
 ```
 ┌──────────────────────────────┐         ┌───────────────────────────────┐
-│ 1. Repo da skill             │         │ 2. Repo externo (opcional)    │
-│ (package distribuído)        │         │ maxsyncai/openspec-workflow   │
-│                              │         │ -template                     │
-│ .opencode/skills/            │         │                               │
-│ maxdev-workflow-sync/        │         │ AGENTS.md                     │
-│ ├── SKILL.md                 │         │ dev-workflow.md               │
-│ ├── README.md                │         │ scripts/close-change.sh        │
-│ ├── scripts/                 │         │ scripts/push-safe.sh          │
-│ │   └── sync-workflow.sh     │         │ openspec/config.yaml          │
-│ ├── assets/ ← fallback       │         │ openspec/templates/*.md       │
+│ 1. Repo da skill (package)   │         │ 2. Override local (opt-in)     │
+│ maxsyncai-opencode-skills     │         │ EXTERNAL_OVERRIDES=/path/dir   │
+│                              │         │                               │
+│ skills/maxdev-workflow-sync/ │         │ AGENTS.md (opcional)           │
+│ ├── SKILL.md                 │         │ dev-workflow.md (opcional)      │
+│ ├── README.md                │         │ scripts/*.sh (opcional)         │
+│ ├── scripts/                 │         │ openspec/config.yaml (opcional)│
+│ │   └── sync-workflow.sh     │         │ openspec/templates/*.md        │
+│ ├── assets/ ← defaults       │         │ workflow.version (opcional)    │
 │ │   ├── workflow.version     │         │                               │
-│ │   ├── AGENTS.md (template) │         │ Sem assets/, sem SKILL.md      │
-│ │   └── ...                  │         │ Sem workflow.version           │
-│ └── references/              │         │                               │
+│ │   ├── AGENTS.md (template) │         │ Override POR ARQUIVO:          │
+│ │   └── ...                  │         │ se ausente → cai em assets/    │
+│ └── references/              │         │ Default: não usado              │
 └──────────────┬───────────────┘         └─────────────────┬─────────────┘
                │                                          │
                │   sync-workflow.sh --apply               │
-               │   (precedência: 1 > 2 > 3)               │
+               │   (precedência: 1 > 2)                    │
                ▼                                          ▼
-       ┌─────────────────────────────────────────────────────┐
-       │ 3. Projeto-alvo (qualquer repo)                    │
-       │                                                   │
-       │ AGENTS.md            ← copiado + {{...}} editados   │
-       │ dev-workflow.md      ← copiado                     │
-       │ scripts/close-change.sh ← copiado                  │
-       │ scripts/push-safe.sh   ← copiado                   │
-       │ openspec/config.yaml  ← copiado + workflow_version  │
-       │ openspec/templates/   ← copiado                    │
-       └─────────────────────────────────────────────────────┘
+        ┌─────────────────────────────────────────────────────┐
+        │ 3. Projeto-alvo (qualquer repo)                    │
+        │                                                   │
+        │ AGENTS.md            ← copiado + {{...}} editados   │
+        │ dev-workflow.md      ← copiado                     │
+        │ scripts/close-change.sh ← copiado                  │
+        │ scripts/push-safe.sh   ← copiado                   │
+        │ openspec/config.yaml  ← copiado + workflow_version  │
+        │ openspec/templates/   ← copiado                    │
+        └─────────────────────────────────────────────────────┘
 ```
 
 **Ordem de precedência em runtime** (para cada arquivo canônico):
 
 ```
-EXTERNAL_OVERRIDES (env, explícito)
+EXTERNAL_OVERRIDES/<arquivo> (env explícito, se existir)
         │  não definido OU arquivo ausente
         ▼
-maxsyncai/openspec-workflow-template (GitHub, se acessível)
-        │  não acessível OU arquivo ausente
-        ▼
-assets/ embutidos na skill  ← fallback que SEMPRE existe
+assets/<arquivo> embutido no package  ← fallback que SEMPRE existe
 ```
 
 ### 12.2 Árvore: Repo da skill (entidade 1)
@@ -541,28 +464,30 @@ maxsyncai-opencode-skills/              ← repo do package (raiz)
             └── merge-strategy.md          ← detalhes técnicos do merge dry-run+diff
 ```
 
-### 12.3 Árvore: Repo externo (entidade 2, opcional)
+### 12.3 Árvore: Override local (entidade 2, opt-in)
 
-Repo separado, só os 7 arquivos canônicos (override opcional v1.0.2+ para
-`workflow.version`). **Não tem** `SKILL.md`, `README.md` da skill,
+Diretório local apontado via `EXTERNAL_OVERRIDES` (env var). Não é repo — é
+um diretório no filesystem. Contém **somente** arquivos que você quer
+override; ausentes caem em `assets/`. **Não tem** `SKILL.md`, `README.md`,
 `scripts/sync-workflow.sh`, `assets/`, `references/`:
 
 ```
-maxsyncai/openspec-workflow-template/
-├── AGENTS.md
-├── dev-workflow.md
-├── LICENSE
-├── README.md                              ← README mínimo do template (não da skill)
-├── workflow.version                       ← opcional (override v1.0.2+)
+meu-template-local/                       ← $EXTERNAL_OVERRIDES
+├── AGENTS.md                              ← override (opcional)
+├── dev-workflow.md                        ← override (opcional)
 ├── scripts/
-│   ├── close-change.sh
-│   └── push-safe.sh
-└── openspec/
-    ├── config.yaml
-    └── templates/
-        ├── explore-brief.md
-        └── design.md
+│   ├── close-change.sh                    ← override (opcional)
+│   └── push-safe.sh                       ← override (opcional)
+├── openspec/
+│   ├── config.yaml                        ← override (opcional)
+│   └── templates/
+│       ├── explore-brief.md              ← override (opcional)
+│       └── design.md                     ← override (opcional)
+└── workflow.version                       ← override (opcional, desde v1.0.3)
 ```
+
+Ver [§7](#7-override-local-via-external_overrides-opt-in) para casos de uso
+(forks privados, air-gapped, testes locais).
 
 ### 12.4 Árvore: Projeto-alvo (entidade 3)
 
@@ -635,15 +560,16 @@ propaga (após bump de versão e redistribute). Regra prática:
 | **Drift** | Diferença entre `workflow_version` instalada e `WORKFLOW_VERSION` da skill — detectado por `--check` |
 | **Projeto-alvo** | Repo que adota o workflow MaxDev; recebe os 7 canônicos na raiz |
 | **Repo da skill** | Repo que distribui o package (`maxsyncai-opencode-skills`, carrega `skills/maxdev-workflow-sync/`) |
-| **Repo externo** | `maxsyncai/openspec-workflow-template` — repo GitHub opcional que override os 7 canônicos |
-| **Override per-file** | O externo só sobrepõe os arquivos que existem nele; os ausentes caem para `assets/` |
-| `EXTERNAL_OVERRIDES` | Variável de ambiente apontando para diretório local com overrides (mais forte na precedência) |
+| **Override local** | Diretório apontado via `EXTERNAL_OVERRIDES` (env var) com arquivos canônicos para override (opt-in, avançado). Não é repo — é pasta local. |
+| **Package** | Repo distribuído como plugin opencode (instalado em `~/.cache/opencode/packages/.../`). |
+| **Plugin entry** | Arquivo `.opencode/plugins/maxsyncai-opencode-skills.js` que registra `skills/` em `config.skills.paths` no startup do opencode. |
+| **Override per-file** | Se `EXTERNAL_OVERRIDES/<arquivo>` existe, override; se não, cai em `assets/<arquivo>`. |
+| `EXTERNAL_OVERRIDES` | Variável de ambiente apontando para diretório local de override (mais forte na precedência; default: não setada). |
 | `PROJECT_ROOT` | Variável de ambiente com path do projeto-alvo; default `$(pwd)` — exporte se rodar fora do alvo |
 | `workflow_version` | Chave semver em `openspec/config.yaml` do projeto-alvo (preenchida pela skill) |
 | `workflow.version` | Arquivo em `assets/workflow.version` com a versão atual da skill (semver) |
-| **GATES** | Checkpoints obrigatórios do workflow MaxDefinidos em `AGENTS.md` (GATE 0 a GATE 5) |
+| **GATES** | Checkpoints obrigatórios do workflow MaxDev, definidos em `AGENTS.md` (GATE 0 a GATE 5) |
 | **MaxDev** | Nome canônico do workflow distribuído por esta skill (não é nome de projeto) |
-| **MaxSyncai** | Organização responsável por publicar o repo externo `openspec-workflow-template` |
 | **Sync idempotente** | Segundo run com mesma versão = no-op; só re-aplica se versão mudar ou `--force` |
 
 ---
@@ -654,13 +580,14 @@ propaga (após bump de versão e redistribute). Regra prática:
 |---|---|---|
 | 1.0.0 | (preexistente) | Versão inicial da skill: `sync-workflow.sh`, `assets/`, `SKILL.md`, `references/merge-strategy.md` |
 | 1.0.1 | 2026-08-05 | **Fix**: `{{WORKFLOW_VERSION}}` agora auto-substituído em `AGENTS.md` do projeto-alvo (bloco `sed` com guarda `grep -q`). **Fix**: `workflow_version:` duplicado em bootstrap — template `assets/openspec/config.yaml` sem chave hardcoded + lógica `sed`/`append` robusta (não depende mais de `BOOTSTRAP`). **Docs**: `README.md` adicionado (guia de uso humano), seções novas — [§3 Repositórios em jogo](#3-repositórios-em-jogo), [§12 Estrutura dos repositórios](#12-estrutura-dos-repositórios) com diagrama ASCII, [§13 Glossário](#13-glossário), [§14 Changelog](#14-changelog). Cleanup de referências a projetos específicos em `README.md`/`SKILL.md`/`merge-strategy.md`. Sections numeradas. |
-| 1.0.2 | 2026-08-05 | **Fix**: `sync-workflow.sh` reordenado — detecção do repo externo (`git ls-remote` + clone shallow) agora ocorre **antes** da leitura de `WORKFLOW_VERSION` e da detecção de bootstrap/drift. Antes, o script abortava prematuro ou decidia drift com versão errada em installs onde `assets/workflow.version` estava faltante/desatualizada, sem nunca consultar o externo. **Mudança de design**: `workflow.version` AGORA é overridável pelo repo externo (precedência: `EXTERNAL_OVERRIDES/workflow.version` > `assets/workflow.version`). Mensagem de abort mais clara (enumera ambas as fontes tentadas). Log explícito da fonte ativa ("Usando repo externo ... override" vs "Repo externo inacessível — usando assets/ embutidos"). README [§7.3](#73-workflowversion-é-overridável), [§7.4](#74-estrutura-do-repo-externo-override-total), [§7.6](#76-ordem-de-precedência-por-arquivo) atualizados. |
+| 1.0.2 | 2026-08-05 | **Fix**: `sync-workflow.sh` reordenado — detecção do repo externo (`git ls-remote` + clone shallow) agora ocorre **antes** da leitura de `WORKFLOW_VERSION` e da detecção de bootstrap/drift. Antes, o script abortava prematuro ou decidia drift com versão errada em installs onde `assets/workflow.version` estava faltante/desatualizada, sem nunca consultar o externo. **Mudança de design**: `workflow.version` AGORA é overridável pelo repo externo (precedência: `EXTERNAL_OVERRIDES/workflow.version` > `assets/workflow.version`). Mensagem de abort mais clara (enumera ambas as fontes tentadas). Log explícito da fonte ativa. |
+| 1.0.3 | 2026-08-06 | **Breaking**: removido auto-clone do repo externo `maxsyncai/openspec-workflow-template` — skill agora é **self-contained** em `assets/`, sem rede. `EXTERNAL_OVERRIDES` mantido como **opt-in local** (env var para diretório local, sem clone remoto). Reduz classe inteira de bugs (ordem de detecção, abort prematuro, contaminação de template repo) e elimina dependência de GitHub remoto. **Cleanup**: `MaxNexa` → `MaxDev` em `assets/scripts/close-change.sh` (2 ocorrências: comentário `:4`, body do chaser PR `:229`). Removidas 2 referências a "Exemplo do maxnexa" em `assets/AGENTS.md` template. README [§7](#7-override-local-via-external_overrides-opt-in) reescrito: era "Repo externo", agora "Override local via EXTERNAL_OVERRIDES (opt-in)". [§3](#3-repositórios-em-jogo), [§8.3](#83-override-local-como-alternativa-aos-assets-avançado), [§12.1](#121-diagrama-package--override-local--projeto-alvo), [§12.3](#123-árvore-override-local-entidade-2-opt-in), [§13](#13-glossário) atualizados. `SKILL.md` e `references/merge-strategy.md` atualizados. |
 
 ---
 
 ## Versão
 
-`workflow.version`: **1.0.2** — bump semver a cada mudança de contrato nos 7
+`workflow.version`: **1.0.3** — bump semver a cada mudança de contrato nos 7
 arquivos canônicos ou no comportamento do `sync-workflow.sh`. Projetos detectam
 drift comparando com `workflow_version`
 em `openspec/config.yaml`.

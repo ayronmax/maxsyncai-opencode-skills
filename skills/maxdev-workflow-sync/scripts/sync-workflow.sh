@@ -9,11 +9,16 @@
 #   ./sync-workflow.sh --check        # drift check (não modifica, só reporta)
 #   ./sync-workflow.sh --force        # sobrescreve mesmo se versão igual
 #
+# Override local (opt-in, avançado):
+#   EXTERNAL_OVERRIDES=/path/para/dir-local ./sync-workflow.sh --apply
+#   (dir local com 7 canônicos + opcional workflow.version)
+#   Útil para: fork privado do template, ambientes air-gapped, testes locais.
+#   Default: nada externo — skill é self-contained em assets/.
+#
 # Detecta:
 #   - workflow_version em openspec/config.yaml (se existir) vs WORKFLOW_VERSION
-#     da skill (assets/workflow.version)
+#     da skill (assets/workflow.version, ou EXTERNAL_OVERRIDES/workflow.version se setado)
 #   - estado dos 7 arquivos canônicos vs defaults embutidos
-#   - repo externo maxsyncai/openspec-workflow-template (optional, override)
 #
 # Saída: exit 0 = ok; exit != 0 = abortou com mensagem.
 #
@@ -30,20 +35,14 @@ ASSETS="$SKILL_DIR/assets"
 step() { echo -e "\n[$1] $2"; }
 abort() { echo "✗ $*"; exit 1; }
 
-# ---------- detecta repo externo (opcional, override) ----------
-# FEITO PRIMEIRO: a detecção da fonte efetiva (externo > assets) deve preceder
-# a leitura de WORKFLOW_VERSION e a construção de CANON, para que a versão e
-# os arquivos venham da fonte certa. Antes esta detecção vinha depois da
-# leitura de WORKFLOW_VERSION, causando abort prematuro em installs onde
-# assets/ estava faltante/desatualizado (bug v1.0.1 — fix v1.0.2).
+# ---------- override local (opt-in, env var) ----------
+# Resolvido EXPLICITAMENTE pelo usuário (path para diretório local).
+# Não há mais auto-clone de repo externo — skill é self-contained em assets/.
 
 EXTERNAL_OVERRIDES="${EXTERNAL_OVERRIDES:-}"
-if [[ -z "$EXTERNAL_OVERRIDES" ]]; then
-  if git ls-remote https://github.com/maxsyncai/openspec-workflow-template HEAD >/dev/null 2>&1; then
-    EXTERNAL_OVERRIDES="/tmp/openspec-workflow-template-$$"
-    git clone --depth 1 https://github.com/maxsyncai/openspec-workflow-template "$EXTERNAL_OVERRIDES" >/dev/null 2>&1 || \
-      EXTERNAL_OVERRIDES=""
-  fi
+if [[ -n "$EXTERNAL_OVERRIDES" && ! -d "$EXTERNAL_OVERRIDES" ]]; then
+  echo "✗ EXTERNAL_OVERRIDES='$EXTERNAL_OVERRIDES' não é um diretório válido."
+  exit 1
 fi
 
 # ---------- determina WORKFLOW_VERSION da fonte efetiva ----------
@@ -57,11 +56,7 @@ if [[ -z "$WORKFLOW_VERSION" && -f "$ASSETS/workflow.version" ]]; then
 fi
 
 if [[ -z "$WORKFLOW_VERSION" ]]; then
-  echo "✗ workflow.version não encontrado (tentei: externo em $EXTERNAL_OVERRIDES, assets em $ASSETS)"
-  # cleanup antes de abortar
-  if [[ -n "$EXTERNAL_OVERRIDES" && -d "$EXTERNAL_OVERRIDES" ]]; then
-    rm -rf "$EXTERNAL_OVERRIDES"
-  fi
+  echo "✗ workflow.version não encontrado (tentei: EXTERNAL_OVERRIDES=$EXTERNAL_OVERRIDES, assets=$ASSETS)"
   exit 1
 fi
 
@@ -110,9 +105,9 @@ else
 fi
 
 if [[ -n "$EXTERNAL_OVERRIDES" ]]; then
-  echo "  ℹ Usando repo externo maxsyncai/openspec-workflow-template (override)."
+  echo "  ℹ Override local ativo: $EXTERNAL_OVERRIDES"
 else
-  echo "  ℹ Repo externo inacessível — usando assets/ embutidos (fallback)."
+  echo "  ℹ Usando assets/ embutidos na skill (default)."
 fi
 
 # ---------- computa diffs ----------
@@ -122,7 +117,7 @@ step "2" "Comparando arquivos canônicos..."
 CHANGES=()
 for dst in "${!CANON[@]}"; do
   src="${CANON[$dst]}"
-  # override por repo externo se existir
+  # override por EXTERNAL_OVERRIDES se setado e o arquivo existir lá
   if [[ -n "$EXTERNAL_OVERRIDES" && -f "$EXTERNAL_OVERRIDES/$dst" ]]; then
     src="$EXTERNAL_OVERRIDES/$dst"
   fi
@@ -217,12 +212,6 @@ AGENTS_DST="$PROJECT_ROOT/AGENTS.md"
 if [[ -f "$AGENTS_DST" ]] && grep -q -F '{{WORKFLOW_VERSION}}' "$AGENTS_DST"; then
   sed -i "s|{{WORKFLOW_VERSION}}|$WORKFLOW_VERSION|g" "$AGENTS_DST"
   echo "  ✓ AGENTS.md: {{WORKFLOW_VERSION}} → $WORKFLOW_VERSION"
-fi
-
-# ---------- cleanup ----------
-
-if [[ -n "$EXTERNAL_OVERRIDES" && -d "$EXTERNAL_OVERRIDES" ]]; then
-  rm -rf "$EXTERNAL_OVERRIDES"
 fi
 
 # ---------- sugestão de placeholders ----------

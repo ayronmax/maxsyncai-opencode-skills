@@ -176,7 +176,7 @@ projeto**, mas prevalecem na operação fina dentro de cada fase:
 ## Targets canônicos (use SÓ estes — outros nomes quebram)
 
 <!-- {{MAKE_TARGETS}} — substitua pelos targets reais do seu Makefile. -->
-<!-- Exemplo do maxnexa: -->
+<!-- Exemplo (ajuste ao seu projeto): -->
 `make lint` · `make lint-backend` · `make lint-frontend`
 `make test` · `make test-backend` · `make test-backend-fast` · `make test-backend-integration` · `make test-frontend`
 `make check` · `make format` · `make build`
@@ -234,4 +234,4 @@ change com `tasks.md` pendente de commit.
 - `openspec/config.yaml` — contexto do projeto + rules de artefatos (proposal/
   design/tasks).
 
-<!-- {{OPTIONAL_REFERENCES}} — Exemplo do maxnexa inclui `TESTING.md` aqui. -->
+<!-- {{OPTIONAL_REFERENCES}} — adicione referências extras do seu projeto aqui (ex.: `TESTING.md`). -->

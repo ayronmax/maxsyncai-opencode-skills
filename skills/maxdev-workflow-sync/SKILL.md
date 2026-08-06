@@ -87,7 +87,10 @@ Modos:
 - Primeiro run: copia defaults embutidos, adiciona `workflow_version: <v>` em `openspec/config.yaml`
 - Segundo run (mesma versão): no-op (workflow_version == $WORKFLOW_VERSION) — a menos que `--force`
 - Versão diferente: dry-run default, pede confirmação antes de atualizar
-- Repo externo `maxsyncai/openspec-workflow-template` (opcional): se existir, override os defaults embutidos
+- Override local (opt-in, avançado): defina `EXTERNAL_OVERRIDES` apontando para
+  um diretório local com os 7 canônicos (e opcional `workflow.version`) — útil
+  para forks privados, ambientes air-gapped ou testes. Default: nada externo,
+  skill self-contained em `assets/`.
 
 ## Placeholders a substituir no bootstrap
 

@@ -7,7 +7,11 @@ Detalhes da estratégia **dry-run + diff** adotada pela skill.
 1. **Dry-run default**: o script nunca modifica sem confirmação explícita (a menos que `--apply` ou `--force`)
 2. **Idempotente**: segundo run = no-op se `workflow_version` em `openspec/config.yaml` == `WORKFLOW_VERSION` em `assets/workflow.version`
 3. **Backup implícito**: a skill nunca deleta arquivos existentes — só sobrescreve os 7 arquivos canônicos (AGENTS.md, dev-workflow.md, scripts/, openspec/config.yaml, openspec/templates/)
-4. **Repo externo opcional**: se `maxsyncai/openspec-workflow-template` existir no GitHub (e for acessível), a skill puxa overrides dele; se não, usa defaults embutidos em `assets/`
+4. **Override local opcional** (`EXTERNAL_OVERRIDES`): se o usuário exportar
+   `EXTERNAL_OVERRIDES=/path/para/dir-local` apontando para um diretório com os
+   7 canônicos (e opcional `workflow.version`), a skill usa esses arquivos como
+   origem; se não, usa defaults embutidos em `assets/`. Sem auto-clone de repo
+   externo — a skill é self-contained.
 
 ## Tratamento de conflitos por tipo de arquivo
 
