@@ -236,6 +236,12 @@ change com `tasks.md` pendente de commit.
 - `.pre-commit-config.yaml` — hooks `block-main` (pre-commit) e `block-main-push`
   (pre-push) reforçam GATE 4. Day-0: `pre-commit install --hook-type pre-commit
   --hook-type pre-push` regenera `.git/hooks/*` (não versionar — caminhos
-  hardcoded da máquina).
+  hardcoded da máquina). Em `--apply` a skill `maxdev-workflow-sync` auto-instala
+  se pre-commit existir (skip em CI/alt-managers — rode manualmente se skipou).
+- `.gitignore` — seção delimitada entre markers `# >>> maxdev-workflow-sync >>>`
+  / `# <<< maxdev-workflow-sync <<<` é re-syncada pela skill. Entries custom
+  acima/abaixo dos markers são sempre preservadas.
+- `.editorconfig` — UTF-8/LF/indent 4-Python-2-TS. Mantém consistência entre
+  editores. Starter — customize conforme o projeto.
 
 <!-- {{OPTIONAL_REFERENCES}} — adicione referências extras do seu projeto aqui (ex.: `TESTING.md`). -->

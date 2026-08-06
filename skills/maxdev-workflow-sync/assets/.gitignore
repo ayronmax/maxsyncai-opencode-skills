@@ -1,0 +1,77 @@
+# >>> maxdev-workflow-sync >>>
+# Seção delimitada gerenciada por maxdev-workflow-sync v{{WORKFLOW_VERSION}}.
+# NÃO edite dentro dos markers — re-sync substitui este bloco.
+# Entries custom vão ACIMA ou ABAIXO dos markers (preservadas em re-sync).
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# Node
+node_modules/
+.pnp
+.pnp.js
+.next/
+.turbo/
+.nuxt/
+.output/
+.vite/
+.eslintcache
+.stylelintcache
+.parcel-cache/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Basic Memory
+memories/
+
+# OpenSpec temporários
+.openspec.tmp/
+# <<< maxdev-workflow-sync <<<
