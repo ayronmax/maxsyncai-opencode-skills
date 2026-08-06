@@ -580,6 +580,17 @@ source ~/.bashrc
 - Reinicie o OpenCode por completo após qualquer alteração no arquivo
 - Verifique que o `command` no MCP existe e é executável (`which <bin>`)
 
+### Hooks do pre-commit não rodam / `.git/hooks/*` ausentes
+
+- O skill `maxdev-workflow-sync` entrega `.pre-commit-config.yaml` mas não os
+  hooks em `.git/hooks/*` — esses são **regenerados pela ferramenta `pre-commit`
+  a partir do `.pre-commit-config.yaml`** (não versionar: caminhos hardcoded da
+  máquina).
+- Day-0: `pre-commit install --hook-type pre-commit --hook-type pre-push`
+  regenera os 2 hooks usados pelo workflow (`block-main` em pre-commit,
+  `block-main-push` em pre-push).
+- Confirme com `pre-commit run --all-files` (deve executar hooks declarados).
+
 ### Push-safe demora muito
 
 - Use `--fast` (iteração) ou `--validate-only` (só schemas)

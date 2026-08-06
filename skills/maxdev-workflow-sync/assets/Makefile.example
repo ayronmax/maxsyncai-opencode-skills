@@ -1,0 +1,77 @@
+# ==========================================================================
+# Makefile.example — Starter gerado por maxdev-workflow-sync
+# v{{WORKFLOW_VERSION}}
+#
+# RENOMEIE para `Makefile` e implemente os targets abaixo. Os stubs `exit 1`
+# propositalmente falham — não suba `Makefile` com stubs para CI/produção.
+#
+# Targets canônicos referenciados pelo contrato (AGENTS.md / dev-workflow.md):
+#   make test | test-backend | test-backend-fast | test-backend-integration
+#        | test-frontend | lint | lint-backend | lint-frontend
+#        | check | format | build | help
+#
+# Stack esperado (placeholders):
+#   {{PKG_MANAGER_BACKEND}}  — ex.: uv (Python), cargo (Rust), go (Go)
+#   {{PKG_MANAGER_FRONTEND}} — ex.: npm, pnpm, yarn
+#   {{LINTER_BACKEND}}       — ex.: ruff (Python), golangci-lint (Go)
+#   {{LINTER_FRONTEND}}      — ex.: eslint (TS/JS)
+#   {{TEST_FRAMEWORK_BACKEND}}  — ex.: pytest, cargo test, go test
+#   {{TEST_FRAMEWORK_FRONTEND}} — ex.: vitest, jest
+# ==========================================================================
+
+.PHONY: help test test-backend test-backend-fast test-backend-integration \
+        test-frontend lint lint-backend lint-frontend check format build
+
+help: ## Exibe esta ajuda
+	@echo "Targets canônicos do workflow MaxDev:"
+	@echo "  test                     — todos os testes (backend + frontend)"
+	@echo "  test-backend             — backend completo (pré-PR)"
+	@echo "  test-backend-fast        — backend rápido (iteração)"
+	@echo "  test-backend-integration — testes de integração"
+	@echo "  test-frontend            — testes do frontend"
+	@echo "  lint                     — todos os linters"
+	@echo "  lint-backend             — linter do backend ({{LINTER_BACKEND}})"
+	@echo "  lint-frontend            — linter do frontend ({{LINTER_FRONTEND}})"
+	@echo "  check                    — lint + fast tests + validação de schemas"
+	@echo "  format                   — auto-formata código"
+	@echo "  build                    — build de produção"
+
+test: test-backend test-frontend ## Todos os testes
+	@echo "✓ make test"
+
+test-backend: ## Backend completo (substitua pelo comando real)
+	@echo "TODO: implementar 'test-backend' — comando {{PKG_MANAGER_BACKEND}} {{TEST_FRAMEWORK_BACKEND}}"
+	@exit 1
+
+test-backend-fast: ## Backend rápido/iteração (substitua pelo comando real)
+	@echo "TODO: implementar 'test-backend-fast' — {{TEST_FRAMEWORK_BACKEND}} unit-only"
+	@exit 1
+
+test-backend-integration: ## Backend integração (substitua pelo comando real)
+	@echo "TODO: implementar 'test-backend-integration' — {{TEST_FRAMEWORK_BACKEND}} integration"
+	@exit 1
+
+test-frontend: ## Frontend (substitua pelo comando real)
+	@echo "TODO: implementar 'test-frontend' — comando {{PKG_MANAGER_FRONTEND}} {{TEST_FRAMEWORK_FRONTEND}}"
+	@exit 1
+
+lint: lint-backend lint-frontend ## Todos os linters
+
+lint-backend: ## Linter backend (substitua pelo comando real)
+	@echo "TODO: implementar 'lint-backend' — comando {{LINTER_BACKEND}}"
+	@exit 1
+
+lint-frontend: ## Linter frontend (substitua pelo comando real)
+	@echo "TODO: implementar 'lint-frontend' — comando {{LINTER_FRONTEND}}"
+	@exit 1
+
+check: lint test-backend-fast ## Validação rápida pré-push
+	@echo "✓ make check"
+
+format: ## Auto-formata (substitua pelo comando real)
+	@echo "TODO: implementar 'format' — comando de formatação do {{LINTER_BACKEND}} / {{LINTER_FRONTEND}}"
+	@exit 1
+
+build: ## Build de produção (substitua pelo comando real)
+	@echo "TODO: implementar 'build' — comando de build produção"
+	@exit 1

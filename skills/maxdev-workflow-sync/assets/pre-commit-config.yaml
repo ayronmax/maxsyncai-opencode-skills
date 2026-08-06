@@ -1,0 +1,72 @@
+# ==========================================================================
+# .pre-commit-config.yaml — Template gerado por maxdev-workflow-sync
+# v{{WORKFLOW_VERSION}}
+#
+# Governança de gates do workflow MaxDev:
+#   - block-main      (pre-commit)  : bloqueia commit direto na main/master
+#   - block-main-push (pre-push)    : bloqueia push direto na main/master
+#
+# Reforça GATE 4 (review humano) — nunca commitar/push direto na main.
+#
+# Day-0 (após apply da skill):
+#     pre-commit install --hook-type pre-commit --hook-type pre-push
+#   Isso regenera .git/hooks/pre-commit e .git/hooks/pre-push a partir deste
+#   arquivo. NÃO versionar .git/hooks/* (caminhos hardcoded da máquina).
+#
+# Placeholders a substituir conforme o stack do projeto:
+#   {{LINTER_BACKEND_RUFF}}   : descomente o bloco ruff se backend for Python
+#   {{LINTER_FRONTEND_ESLINT}}: descomente o bloco eslint se frontend for TS/JS
+# ==========================================================================
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  # {{LINTER_BACKEND_RUFF}} — descomente se backend for Python
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.2
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  # {{/LINTER_BACKEND_RUFF}}
+
+  # {{LINTER_FRONTEND_ESLINT}} — descomente/adapte se frontend for TS/JS
+  # - repo: local
+  #   hooks:
+  #     - id: eslint
+  #       name: ESLint
+  #       entry: npx eslint --fix
+  #       language: system
+  #       files: \.(ts|tsx|js|jsx)$
+  # {{/LINTER_FRONTEND_ESLINT}}
+
+  - repo: local
+    hooks:
+      - id: block-main
+        name: Block direct commits to main/master
+        entry: >
+          bash -c 'branch=$(git symbolic-ref --short HEAD);
+          if [ "$branch" = "main" ] || [ "$branch" = "master" ];
+          then echo "Commits diretos na main bloqueados.";
+          exit 1;
+          fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: block-main-push
+        name: Block direct push to main/master
+        entry: >
+          bash -c 'branch=$(git rev-parse --abbrev-ref HEAD);
+          if [ "$branch" = "main" ] || [ "$branch" = "master" ];
+          then echo "Push direto para main/master bloqueado.";
+          exit 1;
+          fi'
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
