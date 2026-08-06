@@ -116,13 +116,15 @@ fi
 
 step "1/7" "Validando auditoria antes de mover..."
 
-PENDING=$(grep -cE '^- \[ \]' "$TASKS_FILE" || true)
+# Pending tasks EXCLUDING the closeout markers (N.8 GATE 4, N.9 archive) —
+# step 2 will mark those. Only non-closeout tasks should block here.
+PENDING=$(grep -E '^- \[ \]' "$TASKS_FILE" | grep -cvE 'GATE 4|opsx-archive-change' || true)
 if [[ "$PENDING" -gt 0 ]]; then
   if [[ "$ADMIN_MODE" == "true" ]]; then
     echo "  ℹ tasks [ ] pendentes (modo admin): $PENDING"
   else
-    echo "✗ tasks.md tem $PENDING task(s) ainda [- [ ]]. Marque todas como [x] antes."
-    grep -nE '^- \[ \]' "$TASKS_FILE"
+    echo "✗ tasks.md tem $PENDING task(s) ainda [- [ ]] (não-closeout). Marque todas como [x] antes."
+    grep -nE '^- \[ \]' "$TASKS_FILE" | grep -vE 'GATE 4|opsx-archive-change'
     exit 1
   fi
 fi
@@ -160,11 +162,11 @@ step "2/7" "Marcando N.8 (GATE 4) e N.9 (archive) como [x] em $TASKS_FILE..."
 mark_task_done() {
   local f="$1"
   local changed=false
-  # idempotente: só troca linhas [ ] que contêm marcadores de closeout
-  if grep -qE '^- \[ \] .* (GATE 4|opsx-archive-change)' "$f"; then
-    sed -i -E \
-      's/^- \[ \] (.*) (GATE 4.*)$/- [x] \1 \2/; s/^- \[ \] (.*) (\/opsx-archive-change.*)$/- [x] \1 \2/' \
-      "$f"
+  # Idempotente: marca TODAS as [ ] residuais como [x]. As pendências de
+  # implementação já foram bloqueadas no step 1 (excluindo marcadores de
+  # closeout). Sobram apenas closeout tasks — marcar todas é correto.
+  if grep -qE '^- \[ \]' "$f"; then
+    sed -i -E 's/^- \[ \] /- [x] /' "$f"
     changed=true
   fi
   if [[ "$changed" == "true" ]]; then
