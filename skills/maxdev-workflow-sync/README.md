@@ -52,7 +52,7 @@ dúvida — por isso o panorama antes de detalhar:
 
 | # | Entidade | Onde vive | Função | Obrigatória? |
 |---|---|---|---|---|
-| 1 | **Repo da skill** | Repo que distribui o package (carrega `.opencode/skills/maxdev-workflow-sync/`) | Fonte canônica da skill: `SKILL.md`, `scripts/sync-workflow.sh`, `assets/` (fallback embutido) | Sim |
+| 1 | **Repo da skill** | Repo que distribui o package (`maxsyncai-opencode-skills`, carrega `skills/maxdev-workflow-sync/`) | Fonte canônica da skill: `SKILL.md`, `scripts/sync-workflow.sh`, `assets/` (fallback embutido) | Sim |
 | 2 | **Repo externo** | GitHub `maxsyncai/openspec-workflow-template` | Centraliza overrides dos 7 canônicos para múltiplos projetos (hot-update sem bump de package) | Não (opcional) |
 | 3 | **Projeto-alvo** | Qualquer repo que adota o workflow MaxDev | Recebe os 7 canônicos na raiz após `--apply` | Sim (é o destino) |
 
@@ -62,7 +62,8 @@ da entidade 3.
 
 **Um mesmo repo pode ser 1 e 3 ao mesmo tempo**: o repo que distribui a skill
 tipicamente também a aplica em si mesmo (raiz tem arquivos VIVOS, e
-`.opencode/skills/.../assets/` tem TEMPLATES — coexistem no mesmo git). Ver
+`skills/maxdev-workflow-sync/assets/` no package tem TEMPLATES — but coexistem
+em repos distintos: package = skill, projeto-alvo = arquivos vivos). Ver
 [§12.5 Dualidade: vivo vs template](#125-dualidade-vivo-vs-template).
 
 ---
@@ -81,21 +82,28 @@ vai falhar — faça o init primeiro.
 
 ## 5. Modos & flags
 
-Roteie sempre o script `scripts/sync-workflow.sh`:
+Roteie sempre o script `scripts/sync-workflow.sh`. Path depende de onde a
+skill está instalada:
+
+- **Via plugin** (recomendado): invocar `/maxdev-workflow-sync` no opencode —
+  o agente resolve o path internamente.
+- **Manual**: descubra o diretório da skill instalada (ex.: em
+  `~/.cache/opencode/packages/maxsyncai-opencode-skills@.../node_modules/maxsyncai-opencode-skills/skills/maxdev-workflow-sync/`)
+  e rode:
 
 ```bash
-bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh [modo]
+bash <skill_dir>/scripts/sync-workflow.sh [modo]
 ```
 
 > **⚠ `PROJECT_ROOT`** — o script usa `PROJECT_ROOT="${PROJECT_ROOT:-$(pwd)}"`
 > (`sync-workflow.sh:35`). Ou seja, **age no diretório atual** se a variável
-> não for exportada. Se você rodar a skill de fora do projeto-alvo (ex.: no
-> repositório da própria skill, num diretório de scratch, ou via symlink),
+> não for exportada. Se você roda o script manualmente de fora do projeto-alvo
+> (ex.: no diretório da própria skill, num scratch, ou via symlink),
 > **sempre exporte `PROJECT_ROOT` apontando para o destino**:
 >
 > ```bash
 > PROJECT_ROOT=/home/usuario/projetos/alvo \
->   bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh --apply
+>   bash <skill_dir>/scripts/sync-workflow.sh --apply
 > ```
 >
 > Sem isso, o script copia os 7 arquivos canônicos para o diretório atual —
@@ -123,9 +131,11 @@ bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh [modo]
 ```bash
 cd ~/projetos/meu-projeto
 openspec init                                    # 1. init OpenSpec puro
-bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh --apply
-# 2. edite placeholders {{...}} em AGENTS.md e openspec/config.yaml
-# 3. valide
+# 2. invoque a skill:
+#    via opencode: /maxdev-workflow-sync
+#    via CLI:      bash <skill_dir>/scripts/sync-workflow.sh --apply
+# 3. edite placeholders {{...}} em AGENTS.md e openspec/config.yaml
+# 4. valide
 openspec validate
 openspec doctor
 ```
@@ -137,9 +147,11 @@ openspec doctor
 ### 6.2 Drift-check após `openspec@latest`
 
 ```bash
-bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh --check
+# via skill: /maxdev-workflow-sync --check
+# via CLI:
+bash <skill_dir>/scripts/sync-workflow.sh --check
 # se drift detectado:
-bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh   # dry-run + diff
+bash <skill_dir>/scripts/sync-workflow.sh   # dry-run + diff
 ```
 
 ### 6.3 Adotar o workflow MaxDev noutro projeto
@@ -147,14 +159,15 @@ bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh   # dry-run 
 ```bash
 cd ~/projetos/meu-projeto
 openspec init
-bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh --apply
+# /maxdev-workflow-sync ou:
+bash <skill_dir>/scripts/sync-workflow.sh --apply
 # edite placeholders → valide → comite
 ```
 
 ### 6.4 Re-aplicar forçado (debug)
 
 ```bash
-bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh --force
+bash <skill_dir>/scripts/sync-workflow.sh --force
 ```
 
 ### 6.5 Rodar a partir de outro diretório (não o projeto-alvo)
@@ -301,7 +314,7 @@ Defina `EXTERNAL_OVERRIDES` apontando para um diretório local:
 
 ```bash
 EXTERNAL_OVERRIDES=/path/para/meu-template \
-  bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh --apply
+  bash <skill_dir>/scripts/sync-workflow.sh --apply
 ```
 
 Útil para: iterar num template local antes de subir para o GitHub; ambientes
@@ -495,40 +508,52 @@ assets/ embutidos na skill  ← fallback que SEMPRE existe
 
 ### 12.2 Árvore: Repo da skill (entidade 1)
 
-Carrega a skill completa. Tudo vai no git do repo que distribui o package:
+Carrega a skill completa como package opencode. Tudo vai no git do repo que
+distribui o package:
 
 ```
-<repo-distribuidor>/
-└── .opencode/skills/maxdev-workflow-sync/
-    ├── SKILL.md                      ← contrato (description, when/when-not)
-    ├── README.md                     ← este guia de uso
-    ├── scripts/
-    │   └── sync-workflow.sh          ← orquestrador idempotente
-    ├── assets/                       ← defaults embutidos (FALLBACK)
-    │   ├── workflow.version          ← WORKFLOW_VERSION (semver, atual: 1.0.1)
-    │   ├── AGENTS.md                 ← template com placeholders {{...}}
-    │   ├── dev-workflow.md           ← template
-    │   ├── scripts/
-    │   │   ├── close-change.sh       ← cópia como-is
-    │   │   └── push-safe.sh          ← cópia como-is
-    │   └── openspec/
-    │       ├── config.yaml           ← template (sem workflow_version hardcoded)
-    │       └── templates/
-    │           ├── explore-brief.md
-    │           └── design.md
-    └── references/
-        └── merge-strategy.md         ← detalhes técnicos do merge dry-run+diff
+maxsyncai-opencode-skills/              ← repo do package (raiz)
+├── package.json
+├── LICENSE
+├── README.md                              ← README do package (instalação)
+├── .opencode/
+│   └── plugins/
+│       └── maxsyncai-opencode-skills.js   ← entry: registra skills/ em config.skills.paths
+└── skills/
+    └── maxdev-workflow-sync/              ← ESTA skill
+        ├── SKILL.md                       ← contrato (description, when/when-not)
+        ├── README.md                      ← este guia de uso
+        ├── scripts/
+        │   └── sync-workflow.sh           ← orquestrador idempotente
+        ├── assets/                        ← defaults embutidos (FALLBACK)
+        │   ├── workflow.version           ← WORKFLOW_VERSION (semver, atual: 1.0.2)
+        │   ├── AGENTS.md                  ← template com placeholders {{...}}
+        │   ├── dev-workflow.md            ← template
+        │   ├── scripts/
+        │   │   ├── close-change.sh        ← cópia como-is
+        │   │   └── push-safe.sh           ← cópia como-is
+        │   └── openspec/
+        │       ├── config.yaml            ← template (sem workflow_version hardcoded)
+        │       └── templates/
+        │           ├── explore-brief.md
+        │           └── design.md
+        └── references/
+            └── merge-strategy.md          ← detalhes técnicos do merge dry-run+diff
 ```
 
 ### 12.3 Árvore: Repo externo (entidade 2, opcional)
 
-Repo separado, só os 7 arquivos canônicos. **Não tem** `SKILL.md`, `README.md`,
-`scripts/sync-workflow.sh`, `assets/`, `references/`, `workflow.version`:
+Repo separado, só os 7 arquivos canônicos (override opcional v1.0.2+ para
+`workflow.version`). **Não tem** `SKILL.md`, `README.md` da skill,
+`scripts/sync-workflow.sh`, `assets/`, `references/`:
 
 ```
 maxsyncai/openspec-workflow-template/
 ├── AGENTS.md
 ├── dev-workflow.md
+├── LICENSE
+├── README.md                              ← README mínimo do template (não da skill)
+├── workflow.version                       ← opcional (override v1.0.2+)
 ├── scripts/
 │   ├── close-change.sh
 │   └── push-safe.sh
@@ -560,17 +585,25 @@ Qualquer repo que adota o workflow. Recebe os 7 arquivos na raiz após `--apply`
 ### 12.5 Dualidade: vivo vs template
 
 A principal fonte de confusão: quando o repo da skill (entidade 1) **também é**
-projeto-alvo (entidade 3) — caso comum do repo que distribui a skill e a aplica
-em si mesmo. Nesse caso, **dois `AGENTS.md` coexistem no mesmo git**:
+projeto-alvo (entidade 3) — caso que **não se aplica mais** desde a migração
+para package opencode (a skill vive em repo separado do projeto-alvo). Mantida
+para histórico e para o cenário raro em que alguém clona a skill para dentro
+do próprio projeto-alvo (não recomendado). Antes da migração para package, era
+o caso do repo que distribui a skill em `.opencode/skills/` e a aplicava em
+si mesmo na raiz.
+
+Para fins práticos pós-package: dualidade vivo vs template agora é **entre
+repos** — `assets/AGENTS.md` (template) vive no repo do package, `AGENTS.md`
+(vivo) vive na raiz do projeto-alvo. Não coexistem no mesmo git.
 
 | Arquivo | Estado | Localização | Conteúdo |
 |---|---|---|---|
-| `AGENTS.md` | **Vivo** | Raiz do repo (projeto-alvo) | Valores reais preenchidos (ex.: `Python 3.13`, `uv`, `pytest`) |
-| `assets/AGENTS.md` | **Template** | `.opencode/skills/maxdev-workflow-sync/assets/` | Genérico, com `{{...}}` |
+| `AGENTS.md` | **Vivo** | Raiz do projeto-alvo | Valores reais preenchidos (ex.: `Python 3.13`, `uv`, `pytest`) |
+| `assets/AGENTS.md` | **Template** | `skills/maxdev-workflow-sync/assets/` no package | Genérico, com `{{...}}` |
 
-Ambos vão no git. **São arquivos diferentes** com papéis diferentes:
+**São arquivos diferentes** com papéis diferentes:
 
-- O **vivo** (raiz) orienta o agente que trabalha no projeto.
+- O **vivo** (raiz do projeto-alvo) orienta o agente que trabalha no projeto.
 - O **template** (`assets/`) orienta a skill `maxdev-workflow-sync` ao copiar
   para outros projetos.
 
@@ -601,7 +634,7 @@ propaga (após bump de versão e redistribute). Regra prática:
 | **Bootstrap** | Primeiro `--apply` num projeto sem `workflow_version` em `openspec/config.yaml` — copia todos os 7 |
 | **Drift** | Diferença entre `workflow_version` instalada e `WORKFLOW_VERSION` da skill — detectado por `--check` |
 | **Projeto-alvo** | Repo que adota o workflow MaxDev; recebe os 7 canônicos na raiz |
-| **Repo da skill** | Repo que distribui o package (carrega `.opencode/skills/maxdev-workflow-sync/`) |
+| **Repo da skill** | Repo que distribui o package (`maxsyncai-opencode-skills`, carrega `skills/maxdev-workflow-sync/`) |
 | **Repo externo** | `maxsyncai/openspec-workflow-template` — repo GitHub opcional que override os 7 canônicos |
 | **Override per-file** | O externo só sobrepõe os arquivos que existem nele; os ausentes caem para `assets/` |
 | `EXTERNAL_OVERRIDES` | Variável de ambiente apontando para diretório local com overrides (mais forte na precedência) |

@@ -24,30 +24,38 @@ Bootstrap, sincronização e drift-check do workflow MaxDev OpenSpec em qualquer
 ## Arquitetura
 
 ```
-opencode-power-pack/
-└── skills/maxdev-workflow-sync/
-    ├── SKILL.md                   ← este contrato
-    ├── scripts/sync-workflow.sh   ← orquestrador idempotente
-    ├── assets/
-    │   ├── workflow.version       ← WORKFLOW_VERSION (semver)
-    │   ├── AGENTS.md              ← template com placeholders
-    │   ├── dev-workflow.md        ← template
-    │   ├── scripts/close-change.sh  ← copia como-is
-    │   ├── scripts/push-safe.sh      ← copia como-is
-    │   └── openspec/
-    │       ├── config.yaml        ← template com placeholders + workflow_version
-    │       └── templates/
-    │           ├── explore-brief.md
-    │           └── design.md
-    └── references/
-        └── merge-strategy.md      ← detalhes da estratégia dry-run+diff
+maxsyncai-opencode-skills/              ← repo do package (raiz)
+├── package.json
+├── .opencode/
+│   └── plugins/
+│       └── maxsyncai-opencode-skills.js  ← entry: registra skills/ em config.skills.paths
+└── skills/
+    └── maxdev-workflow-sync/           ← esta skill
+        ├── SKILL.md                    ← este contrato
+        ├── scripts/sync-workflow.sh    ← orquestrador idempotente
+        ├── assets/
+        │   ├── workflow.version        ← WORKFLOW_VERSION (semver)
+        │   ├── AGENTS.md               ← template com placeholders
+        │   ├── dev-workflow.md         ← template
+        │   ├── scripts/close-change.sh ← copia como-is
+        │   ├── scripts/push-safe.sh    ← copia como-is
+        │   └── openspec/
+        │       ├── config.yaml         ← template com placeholders + workflow_version
+        │       └── templates/
+        │           ├── explore-brief.md
+        │           └── design.md
+        └── references/
+            └── merge-strategy.md       ← detalhes da estratégia dry-run+diff
 ```
 
 ## Reprodutibilidade cross-project
 
 Para aplicar este workflow em outro projeto:
 1. Rode `openspec init` no projeto novo
-2. Rode `/maxdev-workflow-sync` (ou `bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh --apply`)
+2. Rode `/maxdev-workflow-sync` (invoca a skill via plugin opencode). Para
+   rodar o script manualmente, use o path resolvido da skill instalada (ex.:
+   `bash $(opencode skill path maxdev-workflow-sync)/scripts/sync-workflow.sh --apply`,
+   ou caminho direto bajo `~/.cache/opencode/packages/maxsyncai-opencode-skills@.../node_modules/maxsyncai-opencode-skills/skills/maxdev-workflow-sync/scripts/sync-workflow.sh`).
 3. Edite os placeholders `{{...}}` em `AGENTS.md` e `openspec/config.yaml`
 4. Rode `openspec validate` + `openspec doctor`
 
@@ -55,10 +63,14 @@ Skills upstream OpenSpec são instaladas separadamente via package manager — n
 
 ## Instruções operacionais (rotear o script)
 
-Sempre que esta skill for invocada, rode o script `scripts/sync-workflow.sh`:
+Sempre que esta skill for invocada, rode o script `scripts/sync-workflow.sh`
+relativo ao diretório da skill (auto-resolvido pelo `SKILL_DIR` interno do
+próprio script):
 
 ```bash
-bash .opencode/skills/maxdev-workflow-sync/scripts/sync-workflow.sh
+# via plugin (recomendado): /maxdev-workflow-sync
+# manual: bash <skill_dir>/scripts/sync-workflow.sh
+bash "$(dirname "$0")/scripts/sync-workflow.sh"  # se $0 = SKILL.md da skill
 ```
 
 Modos:
