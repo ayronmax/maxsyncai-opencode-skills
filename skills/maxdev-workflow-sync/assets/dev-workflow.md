@@ -10,7 +10,7 @@
 1. [Fase explore — antes de começar](#1-fase-explore--antes-de-começar)
 2. [Fase propose — proposta e tasks](#2-fase-propose--proposta-e-tasks)
 3. [Fase apply — implementação](#3-fase-apply--implementação)
-4. [Fase validate (GATE 3 — fora do apply)](#4-fase-validate-gate-3--fora-do-apply)
+4. [Fase validate (GATE 3 + GATE 3.5 — fora do apply)](#4-fase-validate-gate-3--gate-35--fora-do-apply)
 5. [Fase PR (GATE 4)](#5-fase-pr-gate-4)
 6. [Fase archive — após merge](#6-fase-archive--após-merge)
 7. [Mapa de MCPs por fase](#7-mapa-de-mcps-por-fase)
@@ -217,7 +217,7 @@ no OpenSpec e o que está implementado, quebrando a auditoria no archive.
 
 ---
 
-## 4. Fase validate (GATE 3 — fora do apply)
+## 4. Fase validate (GATE 3 + GATE 3.5 — fora do apply)
 
 Objetivo: validação estrutural razoável de que a implementação está correta.
 Executada como **comandos explícitos separados, fora do skill `apply`**.
@@ -262,6 +262,25 @@ Executada como **comandos explícitos separados, fora do skill `apply`**.
 - Commits intermediários durante desenvolvimento (use `git commit` direto)
 - Quando tiver certeza que testes passaram recentemente (use `git push --no-verify`)
 - Em branches de experimentação que não serão merged
+
+### GATE 3.5 — Aprovação do relatório de verificação
+
+Após rodar todos os passos do checklist (testes, lint, validate, verify-change),
+o agente DEVE:
+
+1. **Apresentar o relatório de verificação** ao humano — sumário (completeness,
+   correctness, coherence) + issues por prioridade (CRITICAL/WARNING/SUGGESTION)
+2. **Pausar** e aguardar aprovação explícita (`aprovar`)
+3. **NÃO** prosseguir para commit, push ou PR até receber `aprovar`
+
+Se o relatório contiver CRITICAL ou WARNING que o humano julgue bloqueantes:
+- Corrigir as issues apontadas
+- Re-executar a verificação (testes + lint + validate + verify-change)
+- Pausar novamente em GATE 3.5 com o relatório atualizado
+
+Após aprovação (`aprovar`):
+- Marcar a task de verify (`7.5` ou equivalente) como `[x]` em `tasks.md`
+- Prosseguir para commit e PR (Fase 5).
 
 ---
 
@@ -401,7 +420,8 @@ basic-memory doctor   # valida consistência file/DB
 | GATE 1 | (humano) | aprovar proposal |
 | apply | Serena (edits em nível de símbolo) + Context7 (sintaxe) + Octocode (exemplos) + Basic Memory (commit decisões) | Implementação incremental precisa |
 | GATE 2 | (humano) | aprovar plano |
-| verify | Serena (`references` p/ dead code) + `make test`/`lint` + `openspec validate`/`doctor` + `/opsx-verify-change` | prova estrutural |
+| verify | Serena (`references` p/ dead code) + `make test`/`lint` + `openspec validate`/`doctor` + `/opsx-verify-change` | validação estrutural razoável (incerteza → `SUGGESTION`) |
+| GATE 3.5 | (humano) | aprovar relatório de verificação |
 | PR/GATE 4 | (humano) | aprovar merge |
 | archive | Basic Memory (`write_note`) + `openspec archive` (orquestrados por `./scripts/close-change.sh`) | knowledge vivo + closeout padronizado |
 | sempre | RTK (auto-comprime output git/test) + TokenScope (`/tokenscope` a ~50% p/ handover) + Engram (captura passiva cross-projeto) | eficiência de tokens, visibilidade |

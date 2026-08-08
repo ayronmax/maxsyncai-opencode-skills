@@ -20,10 +20,13 @@ performance de testes e modos do push-safe), leia `dev-workflow.md` na raiz.
 explore ─▶ propose ─▶ [GATE 1: aprovar proposal] ─▶ apply ─▶ [GATE 2: aprovar plano]
                                                                        │
                                                                        ▼
-                                             [GATE 3: validar] ─▶ PR ─▶ [GATE 4: review humano]
-                                                                          │
-                                                                          ▼
-                                                                       archive
+                                             [GATE 3: validar] ─▶ [GATE 3.5: aprovar relatório de verificação]
+                                                                       │
+                                                                       ▼
+                                                                    PR ─▶ [GATE 4: review humano]
+                                                                           │
+                                                                           ▼
+                                                                        archive
 ```
 
 - **explore** — entender o problema, investigar o codebase, levantar requisitos.
@@ -79,6 +82,13 @@ diretivas, não narrativa.
   Questions do design.md estão resolvidas ou justificadas** (o instruction do
   artifact `tasks` trata disso antes de gerar tasks; o `/opsx-verify-change`
   cruza novamente).
+- **GATE 3.5 — Aprovação do relatório de verificação:** após rodar
+  `/opsx-verify-change`, o relatório de verificação (completeness, correctness,
+  coherence) DEVE ser apresentado ao humano. **PARE** e aguarde `aprovar`
+  explícito do relatório. Em caso de issues (CRITICAL/WARNING), **NÃO**
+  prossiga para commit/PR — corrija as issues, re-execute a verificação,
+  e pause novamente em GATE 3.5. Só após `aprovar`, marque a task de
+  verify como `[x]` em `tasks.md` e prossiga para commit/PR.
 - **GATE 4 — Review humano do PR antes do archive:** após `gh pr create` e
   revisão IA do diff, **PARE** e aguarde merge explícito do humano. Nunca invoque
   `/opsx-archive-change` sem merge confirmado. Se o revisor pedir ajuste,
@@ -139,6 +149,7 @@ openspec archive <name>                   # mergea deltas e arquiva
 | apply | Serena (edits em nível de símbolo) + Context7 (sintaxe) + Octocode (exemplos) + Basic Memory (commit decisões) | Implementação incremental precisa |
 | GATE 2 | (humano) | aprovar plano |
 | verify | Serena (`references` p/ dead code) + `make test`/`lint` + `openspec validate`/`doctor` + `/opsx-verify-change` | validação estrutural razoável (incerteza → `SUGGESTION`) |
+| GATE 3.5 | (humano) | aprovar relatório de verificação |
 | PR/GATE 4 | (humano) | aprovar merge |
 | archive | Basic Memory (`write_note`) + `openspec archive` (orquestrados por `./scripts/close-change.sh`) | knowledge vivo + closeout padronizado |
 | sempre | RTK (auto-comprime output git/test) + TokenScope (`/tokenscope` a ~50% p/ handover) + Engram (captura passiva cross-projeto) | eficiência de tokens, visibilidade |
