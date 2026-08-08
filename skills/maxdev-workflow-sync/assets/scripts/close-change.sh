@@ -142,20 +142,18 @@ if [[ "$ADMIN_MODE" == "false" ]]; then
 fi
 
 # nota no basic-memory (exige título exato "Decisões Técnicas — <change>")
+# Valida via filesystem (.md é mirror do DB pelo write_note) — ~2600x mais rápido que CLI
 NOTE_TITLE="Decisões Técnicas — $CHANGE"
-NOTE_STDERR=$(mktemp)
-if ! basic-memory tool read-note "$NOTE_TITLE" --local 2>"$NOTE_STDERR" | jq -e '.title != null' >/dev/null; then
-  NOTE_ERR=$(cat "$NOTE_STDERR")
-  rm -f "$NOTE_STDERR"
-  abort "Nota 'Decisões Técnicas — $CHANGE' não encontrada no Basic Memory. Crie-a via basic-memory write_note --title \"$NOTE_TITLE\" --folder / --overwrite antes do closeout. Erro: $NOTE_ERR"
+NOTE_FILE="memories/Decisões Técnicas — $CHANGE.md"
+if [[ ! -f "$NOTE_FILE" ]]; then
+  abort "Nota 'Decisões Técnicas — $CHANGE' não encontrada em memories/. Crie-a via basic-memory write_note --title \"$NOTE_TITLE\" --folder / --overwrite antes do closeout."
 fi
-rm -f "$NOTE_STDERR"
 
 # valida implements relations se a change tem spec deltas (só modo não-admin)
 if [[ "$ADMIN_MODE" == "false" ]] && [[ -d "$ACTIVE/specs" ]]; then
   SPEC_COUNT=$(find "$ACTIVE/specs" -name "spec.md" -type f | wc -l)
   if [[ "$SPEC_COUNT" -gt 0 ]]; then
-    IMPLEMENTS_COUNT=$(basic-memory tool read-note "$NOTE_TITLE" --local 2>/dev/null | jq -r '.content // ""' | grep -c 'implements \[\[.*:.*\]\]')
+    IMPLEMENTS_COUNT=$(grep -cE 'implements:?\s*\[\[.*:.*\]\]' "$NOTE_FILE" 2>/dev/null || echo 0)
     if [[ "$IMPLEMENTS_COUNT" -lt "$SPEC_COUNT" ]]; then
       abort "Change '$CHANGE' tem $SPEC_COUNT spec(s) delta (em openspec/changes/$CHANGE/specs/) mas a nota tem apenas $IMPLEMENTS_COUNT relação(ões) 'implements'. Atualize a nota com 'implements [[<capability>: <spec>]]' para cada spec."
     fi
