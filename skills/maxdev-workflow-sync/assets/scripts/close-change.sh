@@ -149,13 +149,25 @@ if [[ ! -f "$NOTE_FILE" ]]; then
   abort "Nota 'Decisões Técnicas — $CHANGE' não encontrada em memories/. Crie-a via basic-memory write_note --title \"$NOTE_TITLE\" --folder / --overwrite antes do closeout."
 fi
 
-# valida implements relations se a change tem spec deltas (só modo não-admin)
-if [[ "$ADMIN_MODE" == "false" ]] && [[ -d "$ACTIVE/specs" ]]; then
-  SPEC_COUNT=$(find "$ACTIVE/specs" -name "spec.md" -type f | wc -l)
-  if [[ "$SPEC_COUNT" -gt 0 ]]; then
-    IMPLEMENTS_COUNT=$(grep -cE 'implements:?\s*\[\[.*:.*\]\]' "$NOTE_FILE" 2>/dev/null || echo 0)
-    if [[ "$IMPLEMENTS_COUNT" -lt "$SPEC_COUNT" ]]; then
-      abort "Change '$CHANGE' tem $SPEC_COUNT spec(s) delta (em openspec/changes/$CHANGE/specs/) mas a nota tem apenas $IMPLEMENTS_COUNT relação(ões) 'implements'. Atualize a nota com 'implements [[<capability>: <spec>]]' para cada spec."
+# valida que specs existem quando capabilities são declaradas (só modo não-admin)
+if [[ "$ADMIN_MODE" == "false" ]] && [[ -f "$ACTIVE/proposal.md" ]]; then
+  CAP_COUNT=$(grep -cE '^- \x60[a-z].*\x60:' "$ACTIVE/proposal.md" 2>/dev/null || echo 0)
+  if [[ "$CAP_COUNT" -gt 0 ]]; then
+    SKIP_SPECS=$(grep -c 'skip_specs:\s*true' "$ACTIVE/.openspec.yaml" 2>/dev/null || echo 0)
+    if [[ "$SKIP_SPECS" -eq 0 ]]; then
+      if [[ ! -d "$ACTIVE/specs" ]]; then
+        abort "Change '$CHANGE' declara $CAP_COUNT capabilities no proposal.md mas não tem specs/. Crie spec deltas em openspec/changes/$CHANGE/specs/<capability>/spec.md."
+      fi
+      SPEC_COUNT=$(find "$ACTIVE/specs" -name "spec.md" -type f | wc -l)
+      if [[ "$SPEC_COUNT" -lt "$CAP_COUNT" ]]; then
+        abort "Change '$CHANGE' declara $CAP_COUNT capabilities no proposal.md mas só tem $SPEC_COUNT spec(s). Crie as specs faltantes."
+      fi
+
+      # valida implements relations na nota do Basic Memory
+      IMPLEMENTS_COUNT=$(grep -cE 'implements:?\s*\[\[.*:.*\]\]' "$NOTE_FILE" 2>/dev/null || echo 0)
+      if [[ "$IMPLEMENTS_COUNT" -lt "$SPEC_COUNT" ]]; then
+        abort "Change '$CHANGE' tem $SPEC_COUNT spec(s) delta mas a nota tem apenas $IMPLEMENTS_COUNT relação(ões) 'implements'. Atualize a nota com 'implements [[<capability>: <spec>]]' para cada spec."
+      fi
     fi
   fi
 fi
@@ -191,7 +203,7 @@ mark_task_done() {
   return 1
 }
 
-mark_task_done "$TASKS_FILE"
+mark_task_done "$TASKS_FILE" || true
 
 # ---------- modo admin: PR só com correção ----------
 
@@ -218,7 +230,7 @@ fi
 # ---------- [3/7] openspec archive ----------
 
 step "3/7" "Rodando openspec archive $CHANGE..."
-openspec archive "$CHANGE"
+openspec archive -y "$CHANGE"
 
 # ---------- [4/7] commit chaser ----------
 

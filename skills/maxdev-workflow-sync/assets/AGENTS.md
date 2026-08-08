@@ -106,6 +106,10 @@ Toda mudança vive em `openspec/changes/<change>/`:
 
 - `proposal.md` — por que mudar (Why, What Changes, Capabilities, Impact).
 - `specs/**/*.md` — deltas de comportamento quando o produto muda.
+  **Cada capability listada no `proposal.md` DEVE ter um spec delta correspondente**
+  em `specs/<capability>/spec.md`. O `close-change.sh` valida que o número de
+  specs bate com o número de capabilities declaradas (a menos que
+  `skip_specs: true` em `.openspec.yaml`).
 - `design.md` — decisões técnicas e trade-offs (Decisions, Risks, Migration
   Plan, **e `## Open Questions` obrigatório** — rule em `openspec/config.yaml`;
   o instruction do artifact `tasks` do package procura essa seção antes de
