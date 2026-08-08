@@ -294,8 +294,13 @@ archiveado antes do merge — o GATE 4 é não negociável.
 7. **Após merge do chaser PR** → rode
    `./scripts/close-change.sh --post-merge <change>` (steps 6-7: volta à
    main, pull, limpa branches penduradas).
-8. **Registrar decisão no Basic Memory** — via `basic-memory_write_note`
-   (details na Fase 6).
+8. **Criar nota de decisão no Basic Memory** — após merge do PR de
+   implementação e **antes** de rodar `./scripts/close-change.sh <change>`.
+   Crie a nota `Decisões Técnicas — <change>` via `basic-memory_write_note`
+   com `overwrite: true`. Se a change tem spec deltas, extraia as capabilities
+   do `proposal.md` e inclua `implements [[<capability>: <spec>]]` para cada spec.
+   O `close-change.sh` valida a existência da nota no step 1/7.
+   (Formato completo no `AGENTS.md`, seção "Registro de decisões".)
 
 ### Feedback no PR (loop de iteração)
 
@@ -369,13 +374,11 @@ Justificativa: correção de livro-razão, não regressão (D5 de
 
 ### Registro de decisão no Basic Memory
 
-Após merge do chaser PR, registre a decisão técnica no Basic Memory via
-`basic-memory_write_note` (nunca `.md` manual):
-- Título: `Decisões Técnicas — <change-name>`
-- Diretório: `"/"` (raiz do projeto Basic Memory)
-- Relations:
-  `- implements [[<capability>: <spec>]]` (quando a change tem spec deltas);
-  `relates_to` / `depends_on` conforme necessário
+A nota `Decisões Técnicas — <change-name>` **já deve existir** antes da
+execução do `close-change.sh` (criada na Fase 5, passo 8). O script valida
+sua existência no step 1/7 e, se a change tem spec deltas, verifica também
+as relações `implements`. O formato completo está documentado no `AGENTS.md`,
+seção "Registro de decisões no Basic Memory".
 
 As notas `Task N` existentes em `memories/` são **histórico** — não
 regenerar, não deletar.

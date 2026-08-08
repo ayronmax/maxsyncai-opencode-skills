@@ -200,15 +200,30 @@ projeto**, mas prevalecem na operação fina dentro de cada fase:
 
 ## Registro de decisões no Basic Memory
 
+- **Quando**: após merge do PR de implementação, **antes** de rodar
+  `./scripts/close-change.sh <change>` (o script valida a existência da nota
+  no step 1/7 e aborta se não encontrar).
 - Título: `Decisões Técnicas — <change-name>` (ex: `Decisões Técnicas — add-auth`)
 - Diretório: sempre `"/"` (raiz do projeto Basic Memory)
-- Escrita: sempre via `write_note` do Basic Memory — nunca `.md` manual
+- Escrita: sempre via `write_note` do Basic Memory com `overwrite: true`
+  (garante idempotência em re-execuções) — nunca `.md` manual
   (o `write_note` espelha DB ↔ filesystem em `memories/`; escrever `.md` manual
   não atualiza o banco e cria inconsistência)
+- Conteúdo: decisões do `design.md` (resumo, decisões, artefatos, stack)
 - Relations:
-  `- implements [[<capability>: <spec>]]` (quando a change tem spec deltas);
-  `relates_to` / `depends_on` conforme necessário
+  - Se a change tem spec deltas (`openspec/changes/<change>/specs/` não vazio),
+    extraia as capabilities do `proposal.md` e adicione uma relação
+    `- implements [[<capability>: <spec>]]` para cada spec delta encontrada.
+    Exemplo: `proposal.md` lista "nucleo-agentico" como capability →
+    verifique `specs/nucleo-agentico/spec.md` → adicione
+    `- implements [[nucleo-agentico: nucleo-agentico]]`.
+  - `relates_to` / `depends_on` conforme necessário
 - As notas `Task N` existentes são **histórico** (não regenerar, não deletar)
+- Parâmetros MCP canônicos:
+  `title: "Decisões Técnicas — <change-name>"`
+  `directory: "/"`
+  `overwrite: true`
+  `content: "<markdown com decisões e relations>"`
 
 ## Timeout de comandos (passe sempre `timeout` em ms no bash tool)
 
