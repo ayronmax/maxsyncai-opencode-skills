@@ -178,7 +178,7 @@ mark_task_done() {
   return 1
 }
 
-mark_task_done "$TASKS_FILE"
+mark_task_done "$TASKS_FILE" || true
 
 # ---------- modo admin: PR só com correção ----------
 
@@ -205,7 +205,7 @@ fi
 # ---------- [3/7] openspec archive ----------
 
 step "3/7" "Rodando openspec archive $CHANGE..."
-openspec archive "$CHANGE"
+openspec archive -y "$CHANGE"
 
 # ---------- [4/7] commit chaser ----------
 
