@@ -73,6 +73,8 @@ rules:
       "implements: \`<capability>\` (openspec/specs/<capability>/spec.md)"
       para cada spec delta presente. Use code-formatting (\`...\`) em vez de
       wiki links — specs são arquivos git, não notas do Basic Memory.
+    - Manter o índice central do projeto (nome em CAIXA ALTA) na raiz do
+      Basic Memory com wiki links [[...]] para todas as decisões técnicas
 
 # Versão do workflow MaxDev instalada (gerenciada por maxdev-workflow-sync).
 # NÃO definir aqui — o sync-workflow.sh adiciona/atualiza esta chave

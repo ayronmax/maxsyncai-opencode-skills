@@ -229,7 +229,25 @@ projeto**, mas prevalecem na operação fina dentro de cada fase:
   `title: "Decisões Técnicas — <change-name>"`
   `directory: "/"`
   `overwrite: true`
+  `tags: ["decisao-tecnica", "<project-slug>", "<change-name>"]`
   `content: "<markdown com decisões e relations>"`
+
+## Índice do projeto no Basic Memory
+
+- Criar um índice central com o nome do projeto em **CAIXA ALTA** na raiz (`"/"`)
+  do Basic Memory. Ex: para o projeto `{{PROJECT_NAME}}` → nota `{{PROJECT_NAME_UPPER}}`.
+- O índice lista todas as notas `Decisões Técnicas — *` com wiki links `[[...]]`
+  (aqui wiki links SÃO corretos — apontam para outras notas do Basic Memory).
+- **Sempre que criar uma nova decisão técnica**, atualizar o índice adicionando
+  o link `[[Decisões Técnicas — <change-name>]]` na seção "Decisões Técnicas".
+- Tags da nota de índice: `["projeto", "indice"]`
+- Tags das notas de decisão: `["decisao-tecnica", "<project-slug>", "<change-name>"]`
+- Parâmetros MCP canônicos para o índice:
+  `title: "<PROJECT_NAME_UPPER>"`
+  `directory: "/"`
+  `overwrite: true`
+  `note_type: "index"`
+  `tags: ["projeto", "indice"]`
 
 ## Timeout de comandos (passe sempre `timeout` em ms no bash tool)
 

@@ -59,6 +59,7 @@ fi
 CHANGE="$1"
 ARCHIVED="openspec/changes/archive/$CHANGE"
 ACTIVE="openspec/changes/$CHANGE"
+PROJECT_UPPER=$(basename "$(pwd)" | tr '[:lower:]' '[:upper:]')
 
 # ---------- helpers ----------
 
@@ -170,6 +171,16 @@ if [[ "$ADMIN_MODE" == "false" ]] && [[ -f "$ACTIVE/proposal.md" ]]; then
       fi
     fi
   fi
+fi
+
+# valida índice central do projeto (ex: MAXCORTEX.md)
+INDEX_FILE="memories/${PROJECT_UPPER}.md"
+DECISION_LINK="[[Decisões Técnicas — $CHANGE]]"
+if [[ ! -f "$INDEX_FILE" ]]; then
+  abort "Índice '$PROJECT_UPPER' não encontrado em memories/. Crie-o via basic-memory write_note antes do closeout."
+fi
+if ! grep -qF "$DECISION_LINK" "$INDEX_FILE" 2>/dev/null; then
+  abort "Índice '$PROJECT_UPPER' não referencia esta change. Adicione '$DECISION_LINK' ao índice antes do closeout."
 fi
 
 # PR merged (modo não-admin)
