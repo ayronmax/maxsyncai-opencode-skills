@@ -151,7 +151,7 @@ fi
 
 # valida que specs existem quando capabilities são declaradas (só modo não-admin)
 if [[ "$ADMIN_MODE" == "false" ]] && [[ -f "$ACTIVE/proposal.md" ]]; then
-  CAP_COUNT=$(grep -cE '^- \x60[a-z].*\x60:' "$ACTIVE/proposal.md" 2>/dev/null || echo 0)
+  CAP_COUNT=$(grep -c $'^- \x60[a-z].*\x60:' "$ACTIVE/proposal.md" 2>/dev/null || echo 0)
   if [[ "$CAP_COUNT" -gt 0 ]]; then
     SKIP_SPECS=$(grep -c 'skip_specs:\s*true' "$ACTIVE/.openspec.yaml" 2>/dev/null || echo 0)
     if [[ "$SKIP_SPECS" -eq 0 ]]; then
