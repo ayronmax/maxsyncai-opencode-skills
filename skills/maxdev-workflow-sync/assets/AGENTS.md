@@ -238,8 +238,13 @@ projeto**, mas prevalecem na operação fina dentro de cada fase:
   do Basic Memory. Ex: para o projeto `{{PROJECT_NAME}}` → nota `{{PROJECT_NAME_UPPER}}`.
 - O índice lista todas as notas `Decisões Técnicas — *` com wiki links `[[...]]`
   (aqui wiki links SÃO corretos — apontam para outras notas do Basic Memory).
-- **Sempre que criar uma nova decisão técnica**, atualizar o índice adicionando
-  o link `[[Decisões Técnicas — <change-name>]]` na seção "Decisões Técnicas".
+- **Sempre que criar uma nova decisão técnica**, criar ou atualizar o índice:
+  - Se o índice ainda não existe (primeiro closeout do projeto), criá-lo com
+    `basic-memory_write_note` (parâmetros abaixo) listando a decisão.
+  - Se já existe, usar `basic-memory_write_note` com `overwrite: true` para
+    adicionar o link `[[Decisões Técnicas — <change-name>]]` à lista.
+  - O `close-change.sh` valida que o índice existe e referencia a change
+    (step 1/7) — se falhar, o script aborta com instrução explícita.
 - Tags da nota de índice: `["projeto", "indice"]`
 - Tags das notas de decisão: `["decisao-tecnica", "<project-slug>", "<change-name>"]`
 - Parâmetros MCP canônicos para o índice:
