@@ -55,6 +55,15 @@ rules:
     - "Tipo Spike: - [ ] X.Y Spike: <pergunta> → decision em <arquivo>. Spike
       preserva natureza exploratória (não é task de implementação direta)."
     - Indicar arquivos afetados por task quando relevante
+  closeout:
+    - Antes de rodar close-change.sh, criar a nota "Decisões Técnicas — <change>"
+      no Basic Memory via basic-memory_write_note com overwrite: true e
+      directory: "/"
+    - Se a change tem spec deltas (skip_specs != true em .openspec.yaml e
+      specs/ não vazio), a nota DEVE incluir relações
+      "implements [[<capability>: <spec>]]" para cada spec delta presente.
+      Extrair as capabilities do proposal.md e verificar
+      specs/<capability>/spec.md.
 
 # Versão do workflow MaxDev instalada (gerenciada por maxdev-workflow-sync).
 # NÃO definir aqui — o sync-workflow.sh adiciona/atualiza esta chave

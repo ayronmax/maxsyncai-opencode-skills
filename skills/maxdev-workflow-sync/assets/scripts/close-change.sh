@@ -143,8 +143,23 @@ fi
 
 # nota no basic-memory (exige título exato "Decisões Técnicas — <change>")
 NOTE_TITLE="Decisões Técnicas — $CHANGE"
-if ! basic-memory tool search-notes "$NOTE_TITLE" 2>/dev/null | jq -r '.results[].title' | grep -qF "$NOTE_TITLE"; then
-  abort "Nota 'Decisões Técnicas — $CHANGE' não encontrada no Basic Memory. Crie-a via basic-memory write_note antes do closeout."
+NOTE_STDERR=$(mktemp)
+if ! basic-memory tool read-note "$NOTE_TITLE" --local 2>"$NOTE_STDERR" | jq -e '.title != null' >/dev/null; then
+  NOTE_ERR=$(cat "$NOTE_STDERR")
+  rm -f "$NOTE_STDERR"
+  abort "Nota 'Decisões Técnicas — $CHANGE' não encontrada no Basic Memory. Crie-a via basic-memory write_note --title \"$NOTE_TITLE\" --folder / --overwrite antes do closeout. Erro: $NOTE_ERR"
+fi
+rm -f "$NOTE_STDERR"
+
+# valida implements relations se a change tem spec deltas (só modo não-admin)
+if [[ "$ADMIN_MODE" == "false" ]] && [[ -d "$ACTIVE/specs" ]]; then
+  SPEC_COUNT=$(find "$ACTIVE/specs" -name "spec.md" -type f | wc -l)
+  if [[ "$SPEC_COUNT" -gt 0 ]]; then
+    IMPLEMENTS_COUNT=$(basic-memory tool read-note "$NOTE_TITLE" --local 2>/dev/null | jq -r '.content // ""' | grep -c 'implements \[\[.*:.*\]\]')
+    if [[ "$IMPLEMENTS_COUNT" -lt "$SPEC_COUNT" ]]; then
+      abort "Change '$CHANGE' tem $SPEC_COUNT spec(s) delta (em openspec/changes/$CHANGE/specs/) mas a nota tem apenas $IMPLEMENTS_COUNT relação(ões) 'implements'. Atualize a nota com 'implements [[<capability>: <spec>]]' para cada spec."
+    fi
+  fi
 fi
 
 # PR merged (modo não-admin)
@@ -178,7 +193,7 @@ mark_task_done() {
   return 1
 }
 
-mark_task_done "$TASKS_FILE" || true
+mark_task_done "$TASKS_FILE"
 
 # ---------- modo admin: PR só com correção ----------
 
@@ -205,7 +220,7 @@ fi
 # ---------- [3/7] openspec archive ----------
 
 step "3/7" "Rodando openspec archive $CHANGE..."
-openspec archive -y "$CHANGE"
+openspec archive "$CHANGE"
 
 # ---------- [4/7] commit chaser ----------
 
