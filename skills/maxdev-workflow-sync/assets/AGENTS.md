@@ -216,11 +216,13 @@ projeto**, mas prevalecem na operação fina dentro de cada fase:
 - Conteúdo: decisões do `design.md` (resumo, decisões, artefatos, stack)
 - Relations:
   - Se a change tem spec deltas (`openspec/changes/<change>/specs/` não vazio),
-    extraia as capabilities do `proposal.md` e adicione uma relação
-    `- implements [[<capability>: <spec>]]` para cada spec delta encontrada.
+    extraia as capabilities do `proposal.md` e adicione para cada spec delta:
+    `- implements: \`<capability>\` (openspec/specs/<capability>/spec.md)`
     Exemplo: `proposal.md` lista "nucleo-agentico" como capability →
-    verifique `specs/nucleo-agentico/spec.md` → adicione
-    `- implements [[nucleo-agentico: nucleo-agentico]]`.
+    verifique `specs/nucleo-agentico/spec.md` → adicione:
+    `- implements: \`nucleo-agentico\` (openspec/specs/nucleo-agentico/spec.md)`
+    Use code-formatting (\`...\`) em vez de wiki links — specs são arquivos
+    git, não notas do Basic Memory.
   - `relates_to` / `depends_on` conforme necessário
 - As notas `Task N` existentes são **histórico** (não regenerar, não deletar)
 - Parâmetros MCP canônicos:

@@ -164,9 +164,9 @@ if [[ "$ADMIN_MODE" == "false" ]] && [[ -f "$ACTIVE/proposal.md" ]]; then
       fi
 
       # valida implements relations na nota do Basic Memory
-      IMPLEMENTS_COUNT=$(grep -cE 'implements:?\s*\[\[.*:.*\]\]' "$NOTE_FILE" 2>/dev/null || echo 0)
+      IMPLEMENTS_COUNT=$(grep -cE '^- implements:' "$NOTE_FILE" 2>/dev/null || echo 0)
       if [[ "$IMPLEMENTS_COUNT" -lt "$SPEC_COUNT" ]]; then
-        abort "Change '$CHANGE' tem $SPEC_COUNT spec(s) delta mas a nota tem apenas $IMPLEMENTS_COUNT relação(ões) 'implements'. Atualize a nota com 'implements [[<capability>: <spec>]]' para cada spec."
+        abort "Change '$CHANGE' tem $SPEC_COUNT spec(s) delta mas a nota tem apenas $IMPLEMENTS_COUNT relação(ões) 'implements'. Atualize a nota com '- implements: \`<capability>\` (openspec/specs/<capability>/spec.md)' para cada spec."
       fi
     fi
   fi

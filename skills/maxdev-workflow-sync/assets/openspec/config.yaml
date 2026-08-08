@@ -3,18 +3,18 @@ schema: spec-driven
 # Contexto do projeto (exibido ao agente ao criar artefatos)
 # Substitua os placeholders {{...}} pelos valores reais do seu projeto.
 context: |
-  Projeto: {{PROJECT_NAME}} — {{PROJECT_DESCRIPTION}}
+  Projeto: maxcortex — Plataforma central de orquestração de agentes de IA multi-tenant baseada em LangGraph + DeepAgents com pipeline de segurança de 7 dimensões, PostgreSQL como banco único (fila transacional + checkpointer + store vetorial pgvector), e arquitetura hierárquica Agente Supervisor → Hub de Sub-agentes Plug & Play.
 
   Tech stack:
-    Backend: {{LANG_BACKEND}} {{LANG_VERSION}}, {{FRAMEWORK_BACKEND}}
-    Frontend: {{LANG_FRONTEND}} {{LANG_VERSION}}, {{FRAMEWORK_FRONTEND}}
-    Banco: {{DB}}
-    Infra: {{INFRA}}
-    Package managers: {{PKG_MANAGER_BACKEND}}, {{PKG_MANAGER_FRONTEND}}
+    Backend: Python 3.12, FastAPI + LangGraph v1.2+ / DeepAgents v0.7+ + Alembic
+    Frontend: TypeScript, Next.js 16 (App Router + React Server Components)
+    Banco: PostgreSQL 16 + pgvector (HNSW)
+    Infra: Docker Compose (5 serviços: db, api, worker, admin_panel), Prometheus + Grafana, HashiCorp Vault, nginx/traefik
+    Package managers: uv, npm
 
   Testes/lint:
-    - {{TEST_FRAMEWORK_BACKEND}} (backend) / {{TEST_FRAMEWORK_FRONTEND}} (frontend)
-    - {{LINTER_BACKEND}} (backend) / {{LINTER_FRONTEND}} (frontend)
+    - pytest (backend) / vitest (frontend)
+    - ruff (backend) / eslint (frontend)
     - Makefile como interface principal: make test, make lint, make check
 
   Convenções:
@@ -26,15 +26,19 @@ context: |
     - Idioma: código em inglês; artefatos OpenSpec e documentação interna em
       pt-BR; PRs em pt-BR
 
-  # {{PROJECT_SPECIFIC_NOTES}} — adicione aqui qualquer regra específica do
-  # seu projeto (ex.: testes de integração NUNCA paralelizados, async sleep,
-  # etc.). O agente lê esta seção ao criar artefatos.
+  Regras específicas do projeto:
+    - Testes de integração NUNCA paralelizados (PostgreSQL compartilhado)
+    - NUNCA usar `asyncio.sleep()` com tempo real em testes
+    - PII Shield opera via `wrap_model_call`/`after_model` (DeepAgents hooks)
+    - Business Nomenclature Shield opera ANTES do PII Shield no `wrap_model_call`
+    - Ferramentas RAG/DB implementam `NomenclatureAwareMixin` — nunca aplicam PII Shield
+    - Embeddings: `text-embedding-3-small`, 1536 dims, distância cosseno
+    - Streaming: SSE primário, WebSocket como upgrade
+    - Alembic para migrações; LangGraph tables via `checkpointer.setup()`/`store.setup()`
 
 rules:
   proposal:
     - Sempre incluir seção "Why", "What Changes", "Impact" e "Capabilities"
-    - Para mudanças de tooling/docs sem mudança de produto, declarar skip_specs
-      no.change (não inventar specs só para validar)
     - >-
       Cada capability listada no proposal.md DEVE ter um spec delta
       correspondente em specs/<capability>/spec.md, a menos que o .openspec.yaml
@@ -60,16 +64,18 @@ rules:
       preserva natureza exploratória (não é task de implementação direta)."
     - Indicar arquivos afetados por task quando relevante
   closeout:
-    - Antes de rodar close-change.sh, criar a nota "Decisões Técnicas — <change>"
-      no Basic Memory via basic-memory_write_note com overwrite: true e
-      directory: "/"
-    - Se a change tem spec deltas (skip_specs != true em .openspec.yaml e
+    - >-
+      Antes de rodar close-change.sh, criar a nota "Decisões Técnicas — <change>"
+      no Basic Memory via basic-memory_write_note com overwrite: true e directory: "/"
+    - >-
+      Se a change tem spec deltas (skip_specs != true em .openspec.yaml e
       specs/ não vazio), a nota DEVE incluir relações
-      "implements [[<capability>: <spec>]]" para cada spec delta presente.
-      Extrair as capabilities do proposal.md e verificar
-      specs/<capability>/spec.md.
+      "implements: \`<capability>\` (openspec/specs/<capability>/spec.md)"
+      para cada spec delta presente. Use code-formatting (\`...\`) em vez de
+      wiki links — specs são arquivos git, não notas do Basic Memory.
 
 # Versão do workflow MaxDev instalada (gerenciada por maxdev-workflow-sync).
 # NÃO definir aqui — o sync-workflow.sh adiciona/atualiza esta chave
 # automaticamente com base em assets/workflow.version da skill.
 # workflow_version: <preenchido pela skill maxdev-workflow-sync>
+workflow_version: 1.2.9
