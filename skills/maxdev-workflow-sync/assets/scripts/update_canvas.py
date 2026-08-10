@@ -65,10 +65,12 @@ def classify_domain(tags: list[str], title: str) -> str:
         return "fixes"
     if any(t in title_lower for t in ["redesign", "visual", "ui", "shell", "css"]):
         return "visual"
-    if any(t in tag_str for t in ["tooling", "infra", "devops", "ci", "workflow", "sync", "config"]):
+    if any(t in tag_str for t in ["devops", "ci", "sync", "config", "workflow"]):
         return "tooling"
-    if any(t in tag_str for t in ["foundation", "core", "setup", "init", "bootstrap"]):
+    if any(t in tag_str for t in ["foundation", "setup", "init", "bootstrap"]):
         return "core"
+    if any(t in tag_str for t in ["feature", "pipeline", "module", "api", "integration", "service", "component"]):
+        return "features"
     return "core"
 
 

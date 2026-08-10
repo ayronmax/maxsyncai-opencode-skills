@@ -40,6 +40,9 @@ maxsyncai-opencode-skills/              ← repo do package (raiz)
         │   ├── pre-commit-config.yaml  ← canônico (governança block-main/push)
         │   ├── scripts/close-change.sh ← canônico (copia como-is)
         │   ├── scripts/push-safe.sh    ← canônico (copia como-is)
+        │   ├── scripts/update-canvas.sh ← canônico (copia como-is) — regenera Knowledge Graph
+        │   ├── scripts/update_canvas.py ← canônico (copia como-is) — gerador JSON Canvas
+        │   ├── scripts/migrate_implements.py ← canônico (copia como-is) — migra implements p/ wikilinks
         │   ├── gitignore.template      ← canônico delimitado (markers) — source template
         │   │                             (asset sem dot p/ escapar blacklist npm; destino no
         │   │                             projeto-alvo é `.gitignore`)
@@ -204,6 +207,7 @@ Determinísticos, derivados do cwd — substituídos em todos os arquivos copiad
 |---|---|---|
 | `{{WORKFLOW_VERSION}}` | `assets/workflow.version` | Versão da skill (auto) |
 | `{{PROJECT_NAME}}` | `basename $PROJECT_ROOT` (slug via `slugify_name`) | Nome/slug compatível com Basic Memory |
+| `{{PROJECT_NAME_UPPER}}` | `basename $PROJECT_ROOT` (slug uppercase) | Nome do índice BM em CAIXA ALTA |
 | `{{PROJECT_ABSOLUTE_PATH}}` | `$PROJECT_ROOT` (cwd) | Path absoluto da raiz do projeto |
 
 ### Auto-substituídos em pipeline advisory (C1)
