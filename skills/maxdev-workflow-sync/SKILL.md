@@ -1,6 +1,6 @@
 ---
 name: maxdev-workflow-sync
-description: Bootstrap, sync or drift-check the MaxDev OpenSpec workflow in any repository. Use whenever setting up a new OpenSpec project, after upgrading the openspec package, when adopting the MaxDev workflow in another project, when seeing drift between workflow_version in openspec/config.yaml and the installed skill version, or when the user says "sync workflow", "bootstrap workflow", "check workflow drift", "reproduce maxdev workflow here", "instalar workflow", "aplicar workflow maxdev". Also use when initializing OpenSpec tooling in a fresh repo or wanting to enforce GATE 5 closeout pattern across projects. Do not use for upstream openspec commands (proposal, apply, verify, archive) — those are upstream skills.
+description: Bootstrap, sync or drift-check the MaxDev OpenSpec workflow in any repository. Use whenever setting up a new OpenSpec project, after upgrading the openspec package, when adopting the MaxDev workflow in another project, when seeing drift between workflow_version in openspec/config.yaml and the installed skill version, or when the user says "sync workflow", "bootstrap workflow", "check workflow drift", "reproduce maxdev workflow here", "instalar workflow", "aplicar workflow maxdev". Also use when initializing OpenSpec tooling in a fresh repo or wanting to enforce GATE 4 closeout pattern across projects. Do not use for upstream openspec commands (proposal, apply, verify, archive) — those are upstream skills.
 license: MIT
 ---
 
@@ -238,6 +238,20 @@ A skill **não assume** estrutura fixa do openspec upstream:
 - `workflow_version` é chave canônica nossa (em `openspec/config.yaml`) — não depende do openspec
 - Se uma versão futura do openspec renomear `openspec/changes/`, `openspec/specs/`, etc., a skill ainda copia os 9 arquivos canônicos nossos (que vivem em paths estáveis: `AGENTS.md`, `dev-workflow.md`, `scripts/`, `openspec/config.yaml`, `openspec/templates/`, `.pre-commit-config.yaml`, `.gitignore`)
 - Para changes de layout do openspec upstream, rode `/maxdev-workflow-sync --check` para detectar e adaptar
+
+## Changelog
+
+### v1.3.0 — AGENTS enxuto, spec mirrors, 5 gates, genericidade
+
+- **AGENTS.md**: 299→~120 linhas (-62% tokens/sessão). Contrato enxuto com apenas fluxo, gates (0-4), ferramentas, convenções. Detalhes operacionais no dev-workflow.md.
+- **Gates 7→5**: GATE 1 (aprovar change) merge 1+2, GATE 2 (validar+aprovar) merge 3+3.5, GATE 3 (review PR), GATE 4 (closeout).
+- **Spec mirror notes**: close-change.sh step 3.5 cria/atualiza notas `Spec — <cap>` no Basic Memory com `note_type: spec` e `[[wikilinks]]` para o grafo Obsidian.
+- **Canvas automático**: novo script `update_canvas.py` (Python stdlib) gera JSON Canvas com 30+ nós e 40+ arestas. Invocado pelo close-change.sh.
+- **Migração de implements**: script `migrate_implements.py` converte `implements: \`cap\`` → `implements: [[Spec — cap]]`.
+- **Genericidade cross-project**: close-change.sh usa `$PROJECT_UPPER`/`$PROJECT_LOWER` dinâmicos. update_canvas.py detecta índice automaticamente. classify_domain() genérica. update-canvas.sh auto-detecta Python (uv > python3 > python).
+- **Template de decisões**: `## Relations` como seção fixa com `implements`, `depends_on`, `relates_to` em `[[wikilinks]]`.
+- **Novos assets**: `scripts/update-canvas.sh`, `scripts/update_canvas.py`, `scripts/migrate_implements.py`.
+- **Config**: rules atualizadas com gates 0-4. Nova rule closeout para spec mirrors.
 
 ## Referências
 

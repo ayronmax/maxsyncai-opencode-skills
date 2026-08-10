@@ -1,12 +1,12 @@
 #!/bin/bash
 #
 # close-change.sh — Orquestra o closeout de uma change OpenSpec após o merge
-# do PR de implementação (GATE 4). Implementa o GATE 5 do fluxo MaxDev:
+# do PR de implementação (GATE 3). Implementa o GATE 4 do fluxo MaxDev:
 # "Closeout verde antes da próxima change".
 #
 # Pré-requisitos:
 #   - O PR de implementação de <change> (base main, head feature/<change>)
-#     já está MERGED no GitHub (GATE 4 cumprido pelo humano).
+#     já está MERGED no GitHub (GATE 3 cumprido pelo humano).
 #   - Você está na branch main, sincronizada, working tree limpa.
 #   - A nota "Decisões Técnicas — <change>" existe no Basic Memory.
 #
@@ -16,7 +16,7 @@
 #   [2/7] Marca N.8 (GATE 4) e N.9 (opsx-archive-change) como [x] em tasks.md.
 #   [3/7] Roda `openspec archive <change>` (mergeea deltas e move para archive/).
 #   [4/7] Cria branch canônica chore/archive-<change> e commit do closeout.
-#   [5/7] Abre PR chaser (base main) e pausa em GATE 4 humano.
+#   [5/7] Abre PR chaser (base main) e pausa em GATE 3 humano.
 #
 #   Após o merge humano do chaser PR, rode:
 #     ./scripts/close-change.sh --post-merge <change>
@@ -60,6 +60,7 @@ CHANGE="$1"
 ARCHIVED="openspec/changes/archive/$CHANGE"
 ACTIVE="openspec/changes/$CHANGE"
 PROJECT_UPPER=$(basename "$(pwd)" | tr '[:lower:]' '[:upper:]')
+PROJECT_LOWER=$(echo "$PROJECT_UPPER" | tr '[:upper:]' '[:lower:]')
 
 # ---------- helpers ----------
 
@@ -91,7 +92,7 @@ if [[ "$POST_MERGE" == "true" ]]; then
   fi
 
   echo
-  echo "✓ Closeout de '$CHANGE' finalizado. GATE 5 verde."
+  echo "✓ Closeout de '$CHANGE' finalizado. GATE 4 verde."
   exit 0
 fi
 
@@ -186,7 +187,7 @@ fi
 # PR merged (modo não-admin)
 if [[ "$ADMIN_MODE" == "false" ]]; then
   PR_STATE=$(gh pr list --state merged --head "feature/$CHANGE" --json state --jq '.[0].state' 2>/dev/null || echo "")
-  [[ "$PR_STATE" == "MERGED" ]] || abort "PR de implementação de '$CHANGE' (head feature/$CHANGE) não está MERGED (state='$PR_STATE'). GATE 4 ainda não cumprido."
+  [[ "$PR_STATE" == "MERGED" ]] || abort "PR de implementação de '$CHANGE' (head feature/$CHANGE) não está MERGED (state='$PR_STATE'). GATE 3 ainda não cumprido."
 fi
 
 echo "✓ Auditoria validada."
@@ -243,6 +244,64 @@ fi
 step "3/7" "Rodando openspec archive $CHANGE..."
 openspec archive -y "$CHANGE"
 
+# ---------- [3.5] spec mirror notes + canvas ----------
+
+step "3.5" "Atualizando spec mirror notes e canvas..."
+
+NOTE_TITLE="Decisões Técnicas — $CHANGE"
+NOTE_FILE="memories/Decisões Técnicas — $CHANGE.md"
+
+# Para cada spec em openspec/specs/, cria/atualiza nota-espelho
+if [[ -d "openspec/specs" ]]; then
+  for spec_dir in openspec/specs/*/; do
+    spec_name=$(basename "$spec_dir")
+    spec_title="Spec — $spec_name"
+    spec_file="memories/Spec — $spec_name.md"
+
+    # Coleta decisões que implementam esta spec
+    implements_list=""
+    for dec_file in memories/Decisões\ Técnicas*.md; do
+      [[ -f "$dec_file" ]] || continue
+      dec_title=$(basename "$dec_file" .md)
+      if grep -qE "implements:.*\[\[Spec\s*[—–-]\s*$spec_name\]\]" "$dec_file" 2>/dev/null || \
+         grep -qE "implements:.*\`$spec_name\`" "$dec_file" 2>/dev/null; then
+        implements_list+="- [[$dec_title]]
+"
+      fi
+    done
+
+    # Cria/atualiza a nota
+    cat > "$spec_file" << SPECEOF
+---
+title: $spec_title
+type: spec
+permalink: $PROJECT_LOWER/$(echo "$spec_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g; s/--*/-/g')
+tags:
+- spec
+- $PROJECT_LOWER
+- $spec_name
+source: openspec/specs/$spec_name/spec.md
+---
+
+# $spec_title
+
+Spec delta consolidado em \`openspec/specs/$spec_name/spec.md\`.
+
+## Implementado por
+$implements_list
+SPECEOF
+    echo "  ✓ $spec_title"
+  done
+fi
+
+# Regenera canvas
+if [[ -f "scripts/update-canvas.sh" ]]; then
+  bash scripts/update-canvas.sh 2>&1 | sed 's/^/  /'
+  if [[ -f "memories/canvas/${PROJECT_UPPER} - Knowledge Graph.canvas" ]]; then
+    echo "  ✓ Canvas atualizado"
+  fi
+fi
+
 # ---------- [4/7] commit chaser ----------
 
 step "4/7" "Criando commit chaser em chore/archive-$CHANGE..."
@@ -259,17 +318,17 @@ git commit -m "chore(openspec): arquiva change $CHANGE"
 
 # ---------- [5/7] PR chaser ----------
 
-step "5/7" "Abrindo PR chaser (GATE 4 — aguarde merge humano)..."
+step "5/7" "Abrindo PR chaser (GATE 3 — aguarde merge humano)..."
 git push -u origin "$CHASER" 2>&1 | rtk tail -3 || abort "push chaser falhou"
 
 gh pr create --base main --head "$CHASER" \
   --title "chore(openspec): arquiva $CHANGE" \
-  --body "Closeout da change \`$CHANGE\` — mergeia deltas em openspec/specs/ e move a change para archive/. Orquestrado por \`./scripts/close-change.sh\` (GATE 5 do fluxo MaxDev)." \
+  --body "Closeout da change \`$CHANGE\` — mergeia deltas em openspec/specs/, cria spec mirror notes + canvas, e move a change para archive/. Orquestrado por \`./scripts/close-change.sh\` (GATE 4 do fluxo MaxDev)." \
   || abort "gh pr create chaser falhou"
 
 echo
 echo "════════════════════════════════════════════════════════════════"
-echo "  GATE 4 HUMANO — PARE AQUI"
+echo "  GATE 3 HUMANO — PARE AQUI"
 echo "  Após o merge do chaser PR no GitHub, rode:"
 echo "    $0 --post-merge $CHANGE"
 echo "════════════════════════════════════════════════════════════════"

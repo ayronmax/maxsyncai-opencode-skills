@@ -6,7 +6,7 @@
 #   - block-main      (pre-commit)  : bloqueia commit direto na main/master
 #   - block-main-push (pre-push)    : bloqueia push direto na main/master
 #
-# Reforça GATE 4 (review humano) — nunca commitar/push direto na main.
+# Reforça GATE 3 (review humano) — nunca commitar/push direto na main.
 #
 # Day-0 (após apply da skill):
 #     pre-commit install --hook-type pre-commit --hook-type pre-push
