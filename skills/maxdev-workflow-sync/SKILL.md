@@ -1,6 +1,6 @@
 ---
 name: maxdev-workflow-sync
-description: Bootstrap, sync or drift-check the MaxDev OpenSpec workflow in any repository. Use whenever setting up a new OpenSpec project, after upgrading the openspec package, when adopting the MaxDev workflow in another project, when seeing drift between workflow_version in openspec/config.yaml and the installed skill version, or when the user says "sync workflow", "bootstrap workflow", "check workflow drift", "reproduce maxdev workflow here", "instalar workflow", "aplicar workflow maxdev". Also use when initializing OpenSpec tooling in a fresh repo or wanting to enforce GATE 5 closeout pattern across projects. Do not use for upstream openspec commands (proposal, apply, verify, archive) — those are upstream skills.
+description: Bootstrap, sync or drift-check the MaxDev OpenSpec workflow in any repository. Use whenever setting up a new OpenSpec project, after upgrading the openspec package, when adopting the MaxDev workflow in another project, when seeing drift between workflow_version in openspec/config.yaml and the installed skill version, or when the user says "sync workflow", "bootstrap workflow", "check workflow drift", "reproduce maxdev workflow here", "instalar workflow", "aplicar workflow maxdev". Also use when initializing OpenSpec tooling in a fresh repo or wanting to enforce GATE 4 closeout pattern across projects. Do not use for upstream openspec commands (proposal, apply, verify, archive) — those are upstream skills.
 license: MIT
 ---
 
@@ -40,6 +40,9 @@ maxsyncai-opencode-skills/              ← repo do package (raiz)
         │   ├── pre-commit-config.yaml  ← canônico (governança block-main/push)
         │   ├── scripts/close-change.sh ← canônico (copia como-is)
         │   ├── scripts/push-safe.sh    ← canônico (copia como-is)
+        │   ├── scripts/update-canvas.sh ← canônico (copia como-is) — regenera Knowledge Graph
+        │   ├── scripts/update_canvas.py ← canônico (copia como-is) — gerador JSON Canvas
+        │   ├── scripts/migrate_implements.py ← canônico (copia como-is) — migra implements p/ wikilinks
         │   ├── gitignore.template      ← canônico delimitado (markers) — source template
         │   │                             (asset sem dot p/ escapar blacklist npm; destino no
         │   │                             projeto-alvo é `.gitignore`)
@@ -187,7 +190,7 @@ Guards automáticos (sem flag explícita):
 - Segundo run (mesma versão): no-op (workflow_version == $WORKFLOW_VERSION) — a menos que `--force`
 - Versão diferente: dry-run default, pede confirmação antes de atualizar
 - Override local (opt-in, avançado): defina `EXTERNAL_OVERRIDES` apontando para
-  um diretório local com os 9 canônicos + starters (e opcional `workflow.version`)
+  um diretório local com os 12 canônicos + starters (e opcional `workflow.version`)
   — útil para forks privados, ambientes air-gapped ou testes. Default: nada
   externo, skill self-contained em `assets/`.
 
@@ -204,6 +207,7 @@ Determinísticos, derivados do cwd — substituídos em todos os arquivos copiad
 |---|---|---|
 | `{{WORKFLOW_VERSION}}` | `assets/workflow.version` | Versão da skill (auto) |
 | `{{PROJECT_NAME}}` | `basename $PROJECT_ROOT` (slug via `slugify_name`) | Nome/slug compatível com Basic Memory |
+| `{{PROJECT_NAME_UPPER}}` | `basename $PROJECT_ROOT` (slug uppercase) | Nome do índice BM em CAIXA ALTA |
 | `{{PROJECT_ABSOLUTE_PATH}}` | `$PROJECT_ROOT` (cwd) | Path absoluto da raiz do projeto |
 
 ### Auto-substituídos em pipeline advisory (C1)
@@ -238,6 +242,20 @@ A skill **não assume** estrutura fixa do openspec upstream:
 - `workflow_version` é chave canônica nossa (em `openspec/config.yaml`) — não depende do openspec
 - Se uma versão futura do openspec renomear `openspec/changes/`, `openspec/specs/`, etc., a skill ainda copia os 9 arquivos canônicos nossos (que vivem em paths estáveis: `AGENTS.md`, `dev-workflow.md`, `scripts/`, `openspec/config.yaml`, `openspec/templates/`, `.pre-commit-config.yaml`, `.gitignore`)
 - Para changes de layout do openspec upstream, rode `/maxdev-workflow-sync --check` para detectar e adaptar
+
+## Changelog
+
+### v1.3.0 — AGENTS enxuto, spec mirrors, 5 gates, genericidade
+
+- **AGENTS.md**: 299→~120 linhas (-62% tokens/sessão). Contrato enxuto com apenas fluxo, gates (0-4), ferramentas, convenções. Detalhes operacionais no dev-workflow.md.
+- **Gates 7→5**: GATE 1 (aprovar change) merge 1+2, GATE 2 (validar+aprovar) merge 3+3.5, GATE 3 (review PR), GATE 4 (closeout).
+- **Spec mirror notes**: close-change.sh step 3.5 cria/atualiza notas `Spec — <cap>` no Basic Memory com `note_type: spec` e `[[wikilinks]]` para o grafo Obsidian.
+- **Canvas automático**: novo script `update_canvas.py` (Python stdlib) gera JSON Canvas com 30+ nós e 40+ arestas. Invocado pelo close-change.sh.
+- **Migração de implements**: script `migrate_implements.py` converte `implements: \`cap\`` → `implements: [[Spec — cap]]`.
+- **Genericidade cross-project**: close-change.sh usa `$PROJECT_UPPER`/`$PROJECT_LOWER` dinâmicos. update_canvas.py detecta índice automaticamente. classify_domain() genérica. update-canvas.sh auto-detecta Python (uv > python3 > python).
+- **Template de decisões**: `## Relations` como seção fixa com `implements`, `depends_on`, `relates_to` em `[[wikilinks]]`.
+- **Novos assets**: `scripts/update-canvas.sh`, `scripts/update_canvas.py`, `scripts/migrate_implements.py`.
+- **Config**: rules atualizadas com gates 0-4. Nova rule closeout para spec mirrors.
 
 ## Referências
 

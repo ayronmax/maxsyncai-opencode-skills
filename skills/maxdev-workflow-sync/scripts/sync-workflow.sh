@@ -192,6 +192,9 @@ declare -A CANON=(
   ["dev-workflow.md"]="$ASSETS/dev-workflow.md"
   ["scripts/close-change.sh"]="$ASSETS/scripts/close-change.sh"
   ["scripts/push-safe.sh"]="$ASSETS/scripts/push-safe.sh"
+  ["scripts/update-canvas.sh"]="$ASSETS/scripts/update-canvas.sh"
+  ["scripts/update_canvas.py"]="$ASSETS/scripts/update_canvas.py"
+  ["scripts/migrate_implements.py"]="$ASSETS/scripts/migrate_implements.py"
   ["openspec/config.yaml"]="$ASSETS/openspec/config.yaml"
   ["openspec/templates/explore-brief.md"]="$ASSETS/openspec/templates/explore-brief.md"
   ["openspec/templates/design.md"]="$ASSETS/openspec/templates/design.md"
@@ -567,6 +570,7 @@ done
 
 # ---------- A2 — substituir placeholders deriváveis ----------
 # {{PROJECT_NAME}}          = slug do basename do PROJECT_ROOT
+# {{PROJECT_NAME_UPPER}}    = slug do basename em CAIXA ALTA (índice BM)
 # {{PROJECT_ABSOLUTE_PATH}} = $PROJECT_ROOT
 # Determinísticos, deduzíveis do cwd — substituir pós-copy reduz friction.
 
@@ -575,9 +579,11 @@ AUTO_OPENCODE_CREATED=false
 
 if [[ "$OPT_DERIVABLE_PLACEHOLDERS" == "true" ]]; then
   AUTO_PROJECT_NAME=$(slugify_name "$(basename "$PROJECT_ROOT")")
+  AUTO_PROJECT_NAME_UPPER=$(echo "$AUTO_PROJECT_NAME" | tr '[:lower:]' '[:upper:]')
   AUTO_PROJECT_PATH="$PROJECT_ROOT"
   step "A2" "Substituindo placeholders deriváveis..."
   echo "  ℹ {{PROJECT_NAME}} → $AUTO_PROJECT_NAME"
+  echo "  ℹ {{PROJECT_NAME_UPPER}} → $AUTO_PROJECT_NAME_UPPER"
   echo "  ℹ {{PROJECT_ABSOLUTE_PATH}} → $AUTO_PROJECT_PATH"
   for f in "${VERSIONED_TEMPLATES[@]}" "openspec/config.yaml" "AGENTS.md"; do
     full="$PROJECT_ROOT/$f"
@@ -585,6 +591,10 @@ if [[ "$OPT_DERIVABLE_PLACEHOLDERS" == "true" ]]; then
     if grep -q -F '{{PROJECT_NAME}}' "$full"; then
       sed -i "s|{{PROJECT_NAME}}|$AUTO_PROJECT_NAME|g" "$full"
       echo "  ✓ $f: {{PROJECT_NAME}} → $AUTO_PROJECT_NAME"
+    fi
+    if grep -q -F '{{PROJECT_NAME_UPPER}}' "$full"; then
+      sed -i "s|{{PROJECT_NAME_UPPER}}|$AUTO_PROJECT_NAME_UPPER|g" "$full"
+      echo "  ✓ $f: {{PROJECT_NAME_UPPER}} → $AUTO_PROJECT_NAME_UPPER"
     fi
     if grep -q -F '{{PROJECT_ABSOLUTE_PATH}}' "$full"; then
       sed -i "s|{{PROJECT_ABSOLUTE_PATH}}|$AUTO_PROJECT_PATH|g" "$full"

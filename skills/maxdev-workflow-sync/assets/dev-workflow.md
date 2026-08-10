@@ -10,8 +10,8 @@
 1. [Fase explore — antes de começar](#1-fase-explore--antes-de-começar)
 2. [Fase propose — proposta e tasks](#2-fase-propose--proposta-e-tasks)
 3. [Fase apply — implementação](#3-fase-apply--implementação)
-4. [Fase validate (GATE 3 + GATE 3.5 — fora do apply)](#4-fase-validate-gate-3--gate-35--fora-do-apply)
-5. [Fase PR (GATE 4)](#5-fase-pr-gate-4)
+4. [Fase validate (GATE 2 — fora do apply)](#4-fase-validate-gate-2--fora-do-apply)
+5. [Fase PR (GATE 3)](#5-fase-pr-gate-3)
 6. [Fase archive — após merge](#6-fase-archive--após-merge)
 7. [Mapa de MCPs por fase](#7-mapa-de-mcps-por-fase)
 8. [Skills OpenSpec — árvore de decisão](#8-skills-openspec--árvore-de-decisão)
@@ -19,6 +19,7 @@
 10. [Template de explore-brief](#10-template-de-explore-brief)
 11. [Performance de testes](#11-performance-de-testes)
 12. [Troubleshooting](#12-troubleshooting)
+13. [Basic Memory & Obsidian](#13-basic-memory--obsidian)
 
 ---
 
@@ -106,7 +107,7 @@ registrada.
 
 ## 2. Fase propose — proposta e tasks
 
-> **Pré-requisito**: GATE 5 verde da change anterior — rode
+> **Pré-requisito**: GATE 4 verde da change anterior — rode
 > `./scripts/close-change.sh <ultima-change>` antes de iniciar nova change.
 > Se há work in progress de change anterior (branch pendurada, tasks
 > penduradas), resolva via `close-change.sh` (ou `openspec archive --delete`
@@ -160,7 +161,7 @@ novamente.
 
 Objetivo: implementar as tasks do `tasks.md` em ordem, com precisão.
 
-### GATE 5 — Closeout da anterior (pré-apply)
+### GATE 4 — Closeout da anterior (pré-apply)
 
 Antes de retomar trabalho numa change (invocar `/opsx-apply-change`), rode
 `./scripts/close-change.sh <ultima-change>` (modo padrão) e exija saída verde.
@@ -169,14 +170,8 @@ penduradas), resolva via `close-change.sh` (ou `openspec archive --delete`
 documentado) antes de codar. Para a primeira change do projeto: `openspec list`
 retorna 0 ativas, `git branch` sem `feature/*` pendurada, `main` sincronizada.
 **Uma change ativa por vez.** (Bootstrapping: changes que criam/modificam
-gates são isentas de GATE 5 na própria implementação — GATE 5 vale a partir
+gates são isentas de GATE 4 na própria implementação — GATE 4 vale a partir
 da próxima change depois de merged+archived.)
-
-### GATE 2 — Plano aprovado antes de codar
-
-NUNCA invoque `/opsx-apply-change` (nem escreva código da change) sem antes
-**apresentar o plano resumido das tasks** e receber confirmação literal
-`aprovar` do humano.
 
 ### Pré-apply (QA pré-dev)
 
@@ -217,7 +212,7 @@ no OpenSpec e o que está implementado, quebrando a auditoria no archive.
 
 ---
 
-## 4. Fase validate (GATE 3 + GATE 3.5 — fora do apply)
+## 4. Fase validate (GATE 2 — fora do apply)
 
 Objetivo: validação estrutural razoável de que a implementação está correta.
 Executada como **comandos explícitos separados, fora do skill `apply`**.
@@ -263,7 +258,7 @@ Executada como **comandos explícitos separados, fora do skill `apply`**.
 - Quando tiver certeza que testes passaram recentemente (use `git push --no-verify`)
 - Em branches de experimentação que não serão merged
 
-### GATE 3.5 — Aprovação do relatório de verificação
+### Aprovação do relatório de verificação
 
 Após rodar todos os passos do checklist (testes, lint, validate, verify-change),
 o agente DEVE:
@@ -276,7 +271,7 @@ o agente DEVE:
 Se o relatório contiver CRITICAL ou WARNING que o humano julgue bloqueantes:
 - Corrigir as issues apontadas
 - Re-executar a verificação (testes + lint + validate + verify-change)
-- Pausar novamente em GATE 3.5 com o relatório atualizado
+- Pausar novamente em GATE 2 com o relatório atualizado
 
 Após aprovação (`aprovar`):
 - Marcar a task de verify (`7.5` ou equivalente) como `[x]` em `tasks.md`
@@ -284,10 +279,10 @@ Após aprovação (`aprovar`):
 
 ---
 
-## 5. Fase PR (GATE 4)
+## 5. Fase PR (GATE 3)
 
 Objetivo: publicar a change para revisão humana e **aguardar merge**. Nada é
-archiveado antes do merge — o GATE 4 é não negociável.
+archiveado antes do merge — o GATE 3 é não negociável.
 
 ### Sequência canônica (obrigatória)
 
@@ -304,7 +299,7 @@ archiveado antes do merge — o GATE 4 é não negociável.
 4. **Review IA do diff** — auto-crítica antes de pedir tempo humano: rode
    a skill `/opsx-verify-change` ou uma revisão manual do `git diff main...HEAD`
    procurando bugs, convenções quebradas, tasks não cobertas.
-5. **GATE 4 — PARE e aguarde review humano**. Não invoque
+5. **GATE 3 — PARE e aguarde review humano**. Não invoque
    `/opsx-archive-change`. Não force-push. Apenas aguarde.
 6. **Após merge explícito do humano** → rode
    `./scripts/close-change.sh <change>` (orquestra `openspec archive` +
@@ -334,7 +329,7 @@ change:
   `./scripts/push-safe.sh --fast`.
 - [ ] `git push` — o PR atualiza automaticamente (mesmo branch/head). Nunca
   force-push sem coordenação com o revisor.
-- [ ] Re-pausar em **GATE 4** (aplica-se a cada iteração, sem GATE novo).
+- [ ] Re-pausar em **GATE 3** (aplica-se a cada iteração, sem GATE novo).
 
 ### Quando NÃO usar push-safe nesta fase
 
@@ -347,7 +342,7 @@ change:
 ## 6. Fase archive — após merge
 
 Objetivo: mergear deltas nas main specs e atualizar o knowledge vivo. Só executa
-**após merge confirmado do PR** (GATE 4 cumprido). O fluxo é **orquestrado pelo
+**após merge confirmado do PR** (GATE 3 cumprido). O fluxo é **orquestrado pelo
 script `./scripts/close-change.sh <change>`** — não invoque `/opsx-archive-change`
 direto; o script garante auditoria (marca N.8/N.9 **antes** de mover),
 padroniza o closeout como **chaser PR canônico** (`chore/archive-<change>`) e
@@ -368,7 +363,7 @@ limpa branches penduradas após o merge.
      `openspec/specs/`, move a change para `openspec/changes/archive/`)
    - **[4/7]** cria branch `chore/archive-<change>`, commit
      `chore(openspec): arquiva change <change>`
-   - **[5/7]** abre PR chaser (base `main`) e **pausa em GATE 4 humano** (merge
+   - **[5/7]** abre PR chaser (base `main`) e **pausa em GATE 3 humano** (merge
      do chaser)
 
 2. **Após merge do chaser PR**, limpe as branches penduradas:
@@ -417,13 +412,11 @@ basic-memory doctor   # valida consistência file/DB
 |---|---|---|
 | explore | Basic Memory (GATE 0 lookup) + Octocode (impls reais, `discovery`/`concise`) + Context7 (`resolve-library-id` → `query-docs`) + webfetch (web) + Serena (`get_symbols_overview`) | Recuperar contexto, validar abordagem, mapear código-alvo sem ler arquivo inteiro |
 | propose | Context7 (sintaxe p/ design) + Octocode (validar padrão) + Basic Memory (decisões passadas p/ referenciar) | Informar `design.md` |
-| GATE 1 | (humano) | aprovar proposal |
+| GATE 1 | (humano) | aprovar change (proposal + design + tasks) |
 | apply | Serena (edits em nível de símbolo) + Context7 (sintaxe) + Octocode (exemplos) + Basic Memory (commit decisões) | Implementação incremental precisa |
-| GATE 2 | (humano) | aprovar plano |
-| verify | Serena (`references` p/ dead code) + `make test`/`lint` + `openspec validate`/`doctor` + `/opsx-verify-change` | validação estrutural razoável (incerteza → `SUGGESTION`) |
-| GATE 3.5 | (humano) | aprovar relatório de verificação |
-| PR/GATE 4 | (humano) | aprovar merge |
-| archive | Basic Memory (`write_note`) + `openspec archive` (orquestrados por `./scripts/close-change.sh`) | knowledge vivo + closeout padronizado |
+| verify | Serena (`references` p/ dead code) + `make test`/`lint` + `openspec validate`/`doctor` + `/opsx-verify-change` | Validação + aprovação em fluxo contínuo (GATE 2) |
+| PR/GATE 3 | (humano) | aprovar merge |
+| archive | Basic Memory (`write_note`) + spec mirrors + canvas + `openspec archive` (orquestrados por `./scripts/close-change.sh`) | knowledge vivo + closeout padronizado |
 | sempre | RTK (auto-comprime output git/test) + TokenScope (`/tokenscope` a ~50% p/ handover) + Engram (captura passiva cross-projeto) | eficiência de tokens, visibilidade |
 
 ---
@@ -528,11 +521,10 @@ ao agente para ler o brief e apontar ambiguidades **antes** de iniciar
 
 ### Regras para evitar lentidão em novos testes
 
-- **NUNCA usar `asyncio.sleep()` com tempo real em testes** — injete `_sleep` /
-  `_asyncio_sleep` nas classes `PeladaTimer` e `PlacarManager` (ver
-  `TESTING.md` seção "Otimizações de Performance")
-- **NUNCA paralelizar testes de integração** — usam banco PostgreSQL
-  compartilhado; execução concorrente quebra fixtures
+- **NUNCA usar `asyncio.sleep()` com tempo real em testes** — injete dependências
+  de sleep via parâmetros ou monkey-patching para acelerar a execução
+- **NUNCA paralelizar testes de integração que compartilham estado** — banco de
+  dados compartilhado, arquivos, ou conexões de rede quebram com concorrência
 - **Preferir `make test-backend-fast`** durante desenvolvimento iterativo
 - **Fixtures de limpeza de DB** devem truncar apenas **antes** do teste (não
   antes E depois — dobra o tempo)
@@ -558,10 +550,10 @@ Isso é bug do agente, não do fluxo. Reforce: **GATE 0 é lookup obrigatório n
 Basic Memory antes de iniciar QUALQUER change**. Se pegar no meio, pare e
 rode `basic-memory_search` retrospectivamente.
 
-### PR sem merge (GATE 4 não cumprido)
+### PR sem merge (GATE 3 não cumprido)
 
 Se o agente invocou `/opsx-archive-change` sem merge confirmado, isso é bug do
-agente. **GATE 4 é não negociável**: após `gh pr create`, PARE e aguarde o humano
+agente. **GATE 3 é não negociável**: após `gh pr create`, PARE e aguarde o humano
 fazer merge explícito. Se precisar reverter, restaure a change de
 `openspec/changes/archive/` para `openspec/changes/` (não há dano permanente
 enquanto o merge via PR não ocorrer).
@@ -575,9 +567,9 @@ enquanto o merge via PR não ocorrer).
 
 ### Basic Memory: "project not found"
 
-- Rode `basic-memory project list` e confirme que `{{PROJECT_NAME}}` está registrado
+- Rode `basic-memory project list` e confirme que o projeto está registrado
 - Verifique que o path é absoluto em `basic-memory project list`
-- Confirme que o `opencode.json` do projeto usa `--project {{PROJECT_NAME}}`
+- Confirme que o `opencode.json` do projeto usa `--project <nome>` (slug do projeto)
 
 ### RTK não está comprimindo
 
@@ -640,7 +632,7 @@ source ~/.bashrc
   closeout — não cabem no admin mode)
 - **`PR não está MERGED`**: o script exige PR de implementação merged
   (`gh pr list --state merged --head feature/<change>`). Faça o merge no
-  GitHub primeiro (GATE 4 humano)
+  GitHub primeiro (GATE 3 humano)
 - **`main não está sincronizada`**: `git pull origin main` antes de rodar
 - **`basic-memory search não retornou resultados`**: crie a nota
   `Decisões Técnicas — <change>` via `basic-memory write_note` antes do
@@ -650,3 +642,65 @@ source ~/.bashrc
 - **`nada a commitar após openspec archive`**: a change já pode estar
   arquivada — cheque `openspec/changes/archive/<change>/`. Use `--post-merge`
   para limpeza de branches penduradas que sobraram de close-out anterior
+
+---
+
+## 13. Basic Memory & Obsidian
+
+### Spec mirror notes
+
+O `close-change.sh` cria/atualiza automaticamente notas-espelho para cada spec
+em `openspec/specs/`. Cada nota tem `note_type: spec` e `source` apontando para
+o arquivo git. Formato:
+
+- `title: Spec — <capability>`
+- `type: spec`
+- `source: openspec/specs/<capability>/spec.md`
+- Seção "Implementado por" com `[[wiki links]]` para decisões técnicas
+
+**Criação**: automática no step 3.5 do close-change.sh (após `openspec archive`).
+**Atualização**: `overwrite: true` — idempotente, cada closeout recria a nota
+com a lista atualizada de implementações.
+
+### Canvas — Knowledge Graph
+
+O script `scripts/update-canvas.sh` (invocado pelo close-change.sh) gera um
+canvas Obsidian (`<PROJETO> - Knowledge Graph.canvas`) com:
+
+- **Nós**: índice do projeto (CAIXA ALTA) + todas as decisões técnicas + todas as spec mirrors
+- **Arestas**: index→decisão, decisão→decisão (depends_on/relates_to),
+  decisão→spec (implements)
+- **Cores por domínio**: core (laranja), features (verde), tooling (azul),
+  fixes (roxo), visual (azul)
+
+O canvas é JSON Canvas 1.0 compatível — abre nativamente no Obsidian sem plugins.
+
+### Formato de `implements`
+
+Use `[[wiki links]]` para que as relações apareçam no grafo nativo do Obsidian:
+
+```markdown
+## Relations
+- implements: [[Spec — nomenclature-shield]]
+- depends_on: [[Decisões Técnicas — phase-3a-nomenclature-shield-core]]
+- relates_to: [[Decisões Técnicas — phase-3-decomposition]]
+```
+
+O formato antigo (`implements: \`capability\``) continua aceito pelo regex do
+close-change.sh, mas não gera arestas no grafo.
+
+### Migração de notas existentes
+
+Para migrar notas antigas do formato code para wiki links, use o script
+`scripts/migrate-implements.sh` (criado na primeira execução do close-change.sh
+pós v1.3.0). Ele converte:
+
+```
+- implements: \`nomenclature-shield\` (openspec/specs/nomenclature-shield/spec.md)
+```
+
+Em:
+
+```
+- implements: [[Spec — nomenclature-shield]]
+```

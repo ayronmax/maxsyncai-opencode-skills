@@ -54,7 +54,7 @@ rules:
       OpenSpec procura essa seção; não criá-la é bug latente).
   tasks:
     - Quebrar em chunks de no máximo 2 horas
-    - "Últimas tasks de cada change (sequência obrigatória): validação (`openspec validate`, `make lint`, `make test-backend-fast`, `push-safe.sh`) → `/opsx-verify-change` → commit + `git push -u origin feature/<change>` → `gh pr create` (base main, head feature, body pt-BR) → GATE 4 (aguardar merge humano) → `./scripts/close-change.sh <change>` após merge. Nunca archivar sem merge confirmado."
+    - "Últimas tasks de cada change (sequência obrigatória): validação (`openspec validate`, `make lint`, `make test-backend-fast`, `push-safe.sh`) → `/opsx-verify-change` → commit + `git push -u origin feature/<change>` → `gh pr create` (base main, head feature, body pt-BR) → GATE 3 (aguardar merge humano) → `./scripts/close-change.sh <change>` após merge. Nunca archivar sem merge confirmado."
     - >-
       Antes de submeter tasks, validar Open Questions do design (instruction
       do artifact tasks do package exige: "check design.md for Open Questions.
@@ -80,4 +80,4 @@ rules:
 # NÃO definir aqui — o sync-workflow.sh adiciona/atualiza esta chave
 # automaticamente com base em assets/workflow.version da skill.
 # workflow_version: <preenchido pela skill maxdev-workflow-sync>
-workflow_version: 1.2.9
+workflow_version: 1.3.0
