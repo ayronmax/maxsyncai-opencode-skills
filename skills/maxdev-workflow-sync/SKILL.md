@@ -190,7 +190,7 @@ Guards automáticos (sem flag explícita):
 - Segundo run (mesma versão): no-op (workflow_version == $WORKFLOW_VERSION) — a menos que `--force`
 - Versão diferente: dry-run default, pede confirmação antes de atualizar
 - Override local (opt-in, avançado): defina `EXTERNAL_OVERRIDES` apontando para
-  um diretório local com os 9 canônicos + starters (e opcional `workflow.version`)
+  um diretório local com os 12 canônicos + starters (e opcional `workflow.version`)
   — útil para forks privados, ambientes air-gapped ou testes. Default: nada
   externo, skill self-contained em `assets/`.
 
