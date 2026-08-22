@@ -245,6 +245,15 @@ A skill **não assume** estrutura fixa do openspec upstream:
 
 ## Changelog
 
+### v1.3.2 — Genericidade cross-project restaurada (templates limpos)
+
+- **assets/AGENTS.md, dev-workflow.md, config.yaml**: Restaurados placeholders `{{...}}` genéricos. Removidos valores hardcoded MaxCortex que vazaram em v1.3.1.
+- **assets/scripts/close-change.sh**: Genérico — validação via BM CLI (`basic-memory tool search-notes`), spec mirrors via `basic-memory write_note` (sincroniza DB + filesystem), canvas opcional (só roda se `scripts/update-canvas.sh` existir).
+- **assets/scripts/push-safe.sh**: Genérico — usa `make test-backend-fast` / `make test-frontend` em vez de comandos hardcoded.
+- **assets/openspec/config.yaml**: Removida seção `closeout` project-specific. Mantidas apenas rules genéricas (proposal, design, tasks).
+- **references/maxcortex-examples/**: Novo diretório com exemplos MaxCortex (close-change.sh, push-safe.sh, config.yaml, update-canvas.sh, update_canvas.py) para referência.
+- **workflow.version**: Bumped to 1.3.2.
+
 ### v1.3.1 — Restore generic placeholders in canonical templates
 
 - **AGENTS.md**: Restored placeholders (`{{LANG_BACKEND}}`, `{{FRAMEWORK_BACKEND}}`, `{{PKG_MANAGER_BACKEND}}`, etc.) that were accidentally hardcoded with MaxCortex-specific values in v1.3.0. Kept v1.3.0 improvements: 5 gates (0-4), `{{PROJECT_NAME_UPPER}}`, spec mirrors docs, wiki links format.

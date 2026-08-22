@@ -645,11 +645,12 @@ propaga (após bump de versão e redistribute). Regra prática:
 | 1.2.4 | 2026-08-06 | Fix UX — separação MODE×FORCE: `--check` read-only garantido (ordem-agnóstico), aviso explícito em `--apply` demote |
 | 1.3.0 | 2026-08-22 | AGENTS enxuto (-62% tokens), 5 gates (0-4), spec mirrors, canvas, genericidade cross-project |
 | 1.3.1 | 2026-08-22 | Restore generic placeholders in AGENTS.md & config.yaml (v1.3.0 had MaxCortex-specific hardcoded values) |
+| 1.3.2 | 2026-08-22 | **Genericidade cross-project restaurada**: templates em `assets/` voltam a ser genéricos (placeholders `{{...}}`). Exemplo MaxCortex movido para `references/maxcortex-examples/`. `close-change.sh` genérico: validação via BM CLI, spec mirrors via `basic-memory_write_note`, canvas opcional. `push-safe.sh` usa `make test-*` genéricos. `config.yaml` sem seção `closeout` project-specific. Bump `workflow.version` → 1.3.2. |
 
 ---
 
 ## Versão
 
-`workflow.version`: **1.3.1** — bump semver a cada mudança de contrato nos 9
+`workflow.version`: **1.3.2** — bump semver a cada mudança de contrato nos 9
 canônicos ou no comportamento do `sync-workflow.sh`. Projetos detectam
 drift comparando com `workflow_version` em `openspec/config.yaml`.

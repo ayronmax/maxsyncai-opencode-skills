@@ -9,8 +9,8 @@ case "$MODE" in
     echo "🚀 Modo rápido: lint + validações + testes unitários"
     make lint
     openspec validate --changes
-    make test-backend-fast
-    make test-frontend
+    uv run pytest tests/unit/ -n auto
+    cd frontend/admin_panel && npm run test
     ;;
   --full)
     echo "🔍 Modo completo: lint + validações + todos os testes"

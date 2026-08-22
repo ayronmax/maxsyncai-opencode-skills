@@ -199,7 +199,7 @@ que não são desta change, registre como conhecido em `design.md` (Risk) e siga
 - [ ] Usar **Basic Memory** para commit de decisões verificadas durante a
   implementação (não espere o fim; se descobriu algo, registre)
 - [ ] **Pause-livre quando task clara ficou ambígua** (skill
-  `openspec-apply-change:100-101,168,172`): pause pontual, pergunte ao usuário,
+  `openspec-apply-change:100-101,168,172`): pausa pontual, pergunte ao usuário,
   siga. **Não reabre GATE novo** — é pause de etiqueta interna, não gate do
   projeto. A skill é fluid (skill:184-185): pode ser invocada anytime, atualiza
   artefatos se design revelar issue.
@@ -308,13 +308,8 @@ archiveado antes do merge — o GATE 3 é não negociável.
 7. **Após merge do chaser PR** → rode
    `./scripts/close-change.sh --post-merge <change>` (steps 6-7: volta à
    main, pull, limpa branches penduradas).
-8. **Criar nota de decisão no Basic Memory** — após merge do PR de
-   implementação e **antes** de rodar `./scripts/close-change.sh <change>`.
-   Crie a nota `Decisões Técnicas — <change>` via `basic-memory_write_note`
-   com `overwrite: true`. Se a change tem spec deltas, extraia as capabilities
-   do `proposal.md` e inclua `implements [[<capability>: <spec>]]` para cada spec.
-   O `close-change.sh` valida a existência da nota no step 1/7.
-   (Formato completo no `AGENTS.md`, seção "Registro de decisões".)
+8. **Registrar decisão no Basic Memory** — via `basic-memory_write_note`
+   (details na Fase 6).
 
 ### Feedback no PR (loop de iteração)
 
@@ -358,7 +353,7 @@ limpa branches penduradas após o merge.
    - **[1/7]** valida auditoria (tasks 100% `[x]`, `openspec validate`/`doctor`
      verdes, working tree limpa, `main` sincronizada, PR merged, nota no
      Basic Memory)
-   - **[2/7]** marca `N.8` (GATE 4) e `N.9` (archive) como `[x]` em `tasks.md`
+   - **[2/7]** marca `N.8` (GATE 3) e `N.9` (opsx-archive-change) como `[x]` em `tasks.md`
    - **[3/7]** roda `openspec archive <change>` (mergea deltas em
      `openspec/specs/`, move a change para `openspec/changes/archive/`)
    - **[4/7]** cria branch `chore/archive-<change>`, commit
@@ -383,16 +378,17 @@ novamente:
 ```
 Ele marca as tasks como `[x]` e abre PR admin
 (`chore/admin-closeout-<change>`) — **não re-move** nem duplica archive.
-Justificativa: correção de livro-razão, não regressão (D5 de
-`enforce-closeout-gate`).
+Justificativa: correção de livro-razão, não regressão.
 
 ### Registro de decisão no Basic Memory
 
-A nota `Decisões Técnicas — <change-name>` **já deve existir** antes da
-execução do `close-change.sh` (criada na Fase 5, passo 8). O script valida
-sua existência no step 1/7 e, se a change tem spec deltas, verifica também
-as relações `implements`. O formato completo está documentado no `AGENTS.md`,
-seção "Registro de decisões no Basic Memory".
+Após merge do chaser PR, registre a decisão técnica no Basic Memory via
+`basic-memory_write_note` (nunca `.md` manual):
+- Título: `Decisões Técnicas — <change-name>`
+- Diretório: `"/"` (raiz do projeto Basic Memory)
+- Relations:
+  `- implements [[<capability>: <spec>]]` (quando a change tem spec deltas);
+  `relates_to` / `depends_on` conforme necessário
 
 As notas `Task N` existentes em `memories/` são **histórico** — não
 regenerar, não deletar.
@@ -412,11 +408,12 @@ basic-memory doctor   # valida consistência file/DB
 |---|---|---|
 | explore | Basic Memory (GATE 0 lookup) + Octocode (impls reais, `discovery`/`concise`) + Context7 (`resolve-library-id` → `query-docs`) + webfetch (web) + Serena (`get_symbols_overview`) | Recuperar contexto, validar abordagem, mapear código-alvo sem ler arquivo inteiro |
 | propose | Context7 (sintaxe p/ design) + Octocode (validar padrão) + Basic Memory (decisões passadas p/ referenciar) | Informar `design.md` |
-| GATE 1 | (humano) | aprovar change (proposal + design + tasks) |
+| GATE 1 | (humano) | aprovar proposal |
 | apply | Serena (edits em nível de símbolo) + Context7 (sintaxe) + Octocode (exemplos) + Basic Memory (commit decisões) | Implementação incremental precisa |
-| verify | Serena (`references` p/ dead code) + `make test`/`lint` + `openspec validate`/`doctor` + `/opsx-verify-change` | Validação + aprovação em fluxo contínuo (GATE 2) |
+| GATE 2 | (humano) | aprovar plano |
+| verify | Serena (`references` p/ dead code) + `make test`/`lint` + `openspec validate`/`doctor` + `/opsx-verify-change` | prova estrutural |
 | PR/GATE 3 | (humano) | aprovar merge |
-| archive | Basic Memory (`write_note`) + spec mirrors + canvas + `openspec archive` (orquestrados por `./scripts/close-change.sh`) | knowledge vivo + closeout padronizado |
+| archive | Basic Memory (`write_note`) + `openspec archive` (orquestrados por `./scripts/close-change.sh`) | knowledge vivo + closeout padronizado |
 | sempre | RTK (auto-comprime output git/test) + TokenScope (`/tokenscope` a ~50% p/ handover) + Engram (captura passiva cross-projeto) | eficiência de tokens, visibilidade |
 
 ---
@@ -504,7 +501,8 @@ Estrutura canônica:
 
 **Dica**: cada hora investida no brief evita 5 horas de retrabalho depois. Peça
 ao agente para ler o brief e apontar ambiguidades **antes** de iniciar
-`/opsx-propose`.
+`/opsx-propose` — ambiguidades não resolvidas viram `proposal.md` vago, que vira
+`tasks.md` vago, que vira implementação errada.
 
 ---
 
@@ -514,193 +512,3 @@ ao agente para ler o brief e apontar ambiguidades **antes** de iniciar
 |---|---|---|
 | `make test-backend-fast` | ~10 min | Desenvolvimento diário (unitários paralelos + integração sequencial) |
 | `make test-backend` | ~10 min | CI / pre-commit (sequencial, determinístico) |
-| `make test-backend-integration` | ~5 min | Só testes de integração |
-| `make test-frontend` | ~1 min | Vitest |
-| `make test` | ~10 min | Ambos (backend + frontend) |
-| `make check` | ~10 min | QA pré-dev (lint + testes sequenciais) |
-
-### Regras para evitar lentidão em novos testes
-
-- **NUNCA usar `asyncio.sleep()` com tempo real em testes** — injete dependências
-  de sleep via parâmetros ou monkey-patching para acelerar a execução
-- **NUNCA paralelizar testes de integração que compartilham estado** — banco de
-  dados compartilhado, arquivos, ou conexões de rede quebram com concorrência
-- **Preferir `make test-backend-fast`** durante desenvolvimento iterativo
-- **Fixtures de limpeza de DB** devem truncar apenas **antes** do teste (não
-  antes E depois — dobra o tempo)
-- **Timeout de comandos**: passe sempre `timeout` em ms nas chamadas do bash:
-  - Testes (`make test*`): `timeout: 600000` (10 min)
-  - Commits (`git commit`): `timeout: 30000` (30s — hooks são rápidos)
-  - Comandos rápidos (lint, status, format): `timeout: 30000`
-
----
-
-## 12. Troubleshooting
-
-### OpenSpec não valida a change
-
-- Rode `openspec validate` e leia o erro linha a linha — geralmente é link
-  quebrado em `specs/**/*.md` ou campo faltando em `proposal.md`
-- Rode `openspec doctor` para checar relações entre specs e changes
-- Verifique se `.openspec.yaml` está na raiz da change com `schema: spec-driven`
-
-### O agente começou a change sem GATE 0
-
-Isso é bug do agente, não do fluxo. Reforce: **GATE 0 é lookup obrigatório no
-Basic Memory antes de iniciar QUALQUER change**. Se pegar no meio, pare e
-rode `basic-memory_search` retrospectivamente.
-
-### PR sem merge (GATE 3 não cumprido)
-
-Se o agente invocou `/opsx-archive-change` sem merge confirmado, isso é bug do
-agente. **GATE 3 é não negociável**: após `gh pr create`, PARE e aguarde o humano
-fazer merge explícito. Se precisar reverter, restaure a change de
-`openspec/changes/archive/` para `openspec/changes/` (não há dano permanente
-enquanto o merge via PR não ocorrer).
-
-### Serena: "language server failed to start"
-
-- Confirme que a linguagem do projeto é suportada (Python/TS suportados)
-- Reinstale: `uv tool install --force serena`
-- Reindexe: `uvx --from git+https://github.com/oraios/serena serena project index`
-- Aumente o `timeout` no `opencode.json` (ex.: `120000` para projetos grandes)
-
-### Basic Memory: "project not found"
-
-- Rode `basic-memory project list` e confirme que o projeto está registrado
-- Verifique que o path é absoluto em `basic-memory project list`
-- Confirme que o `opencode.json` do projeto usa `--project <nome>` (slug do projeto)
-
-### RTK não está comprimindo
-
-- Confirme que `rtk init -g` foi executado após instalar o cliente
-- `rtk gain` mostra se o hook está sendo acionado; se vazio, o hook não ativa
-- Lembre: o hook só roda em chamadas do Bash tool, não nas tools nativas
-  (Read/Grep/Glob). Para ter benefício nesses, chame `rtk read`, `rtk grep`,
-  `rtk find` explicitamente
-
-### Comandos não encontrados no Linux/WSL
-
-Após instalar via `uv tool install` ou `npm install -g`, pode ser necessário
-adicionar ao PATH:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### OpenCode não carrega MCPs
-
-- Verifique que o `opencode.json` é JSON válido: `jq . opencode.json`
-- Reinicie o OpenCode por completo após qualquer alteração no arquivo
-- Verifique que o `command` no MCP existe e é executável (`which <bin>`)
-
-### Hooks do pre-commit não rodam / `.git/hooks/*` ausentes
-
-- O skill `maxdev-workflow-sync` entrega `.pre-commit-config.yaml` mas não os
-  hooks em `.git/hooks/*` — esses são **regenerados pela ferramenta `pre-commit`
-  a partir do `.pre-commit-config.yaml`** (não versionar: caminhos hardcoded da
-  máquina).
-- Em `--apply` a skill **auto-instala** hooks se `pre-commit` existir. Skipa
-  automaticamente em CI, ambientes com hook manager alternativo (`.husky/`,
-  `lefthook.yml`, `.simple-git-hooks`), ou sem `.git/`. Force com `--install-hooks`.
-- Day-0 manual: `pre-commit install --hook-type pre-commit --hook-type pre-push`
-  regenera os 2 hooks usados pelo workflow (`block-main` em pre-commit,
-  `block-main-push` em pre-push).
-- Confirme com `pre-commit run --all-files` (deve executar hooks declarados).
-
-### `.gitignore` desatualizado
-
-- A skill sincroniza `.gitignore` com uma seção delimitada entre markers
-  `# >>> maxdev-workflow-sync >>>` / `# <<< maxdev-workflow-sync <<<`.
-- O re-sync substitui **só o bloco entre markers** — entries custom
-  acima/abaixo são preservadas.
-- Se markers aparecerem desbalanceados (begin sem end ou vice-versa),
-  o sync aborta a atualização do `.gitignore` com warning — remova
-  manualmente os markers restantes e rode novamente.
-
-### Push-safe demora muito
-
-- Use `--fast` (iteração) ou `--validate-only` (só schemas)
-- Se falhar em lint: rode `make fix` para auto-corrigir
-- Se falhar em testes: rode `make test` para ver output completo
-
-### Closeout não fecha (`close-change.sh` aborta)
-
-- **`tasks.md tem N task(s) ainda [- [ ]]`**: marque todas como `[x]` no
-  `tasks.md` antes de rodar o closeout (são chunks de implementação, não de
-  closeout — não cabem no admin mode)
-- **`PR não está MERGED`**: o script exige PR de implementação merged
-  (`gh pr list --state merged --head feature/<change>`). Faça o merge no
-  GitHub primeiro (GATE 3 humano)
-- **`main não está sincronizada`**: `git pull origin main` antes de rodar
-- **`basic-memory search não retornou resultados`**: crie a nota
-  `Decisões Técnicas — <change>` via `basic-memory write_note` antes do
-  closeout (regra do AGENTS.md)
-- **Modo admin não tem nada a fazer**: tasks `N.8`/`N.9` já marcadas —
-  auditoria já está correta, pule esta change
-- **`nada a commitar após openspec archive`**: a change já pode estar
-  arquivada — cheque `openspec/changes/archive/<change>/`. Use `--post-merge`
-  para limpeza de branches penduradas que sobraram de close-out anterior
-
----
-
-## 13. Basic Memory & Obsidian
-
-### Spec mirror notes
-
-O `close-change.sh` cria/atualiza automaticamente notas-espelho para cada spec
-em `openspec/specs/`. Cada nota tem `note_type: spec` e `source` apontando para
-o arquivo git. Formato:
-
-- `title: Spec — <capability>`
-- `type: spec`
-- `source: openspec/specs/<capability>/spec.md`
-- Seção "Implementado por" com `[[wiki links]]` para decisões técnicas
-
-**Criação**: automática no step 3.5 do close-change.sh (após `openspec archive`).
-**Atualização**: `overwrite: true` — idempotente, cada closeout recria a nota
-com a lista atualizada de implementações.
-
-### Canvas — Knowledge Graph
-
-O script `scripts/update-canvas.sh` (invocado pelo close-change.sh) gera um
-canvas Obsidian (`<PROJETO> - Knowledge Graph.canvas`) com:
-
-- **Nós**: índice do projeto (CAIXA ALTA) + todas as decisões técnicas + todas as spec mirrors
-- **Arestas**: index→decisão, decisão→decisão (depends_on/relates_to),
-  decisão→spec (implements)
-- **Cores por domínio**: core (laranja), features (verde), tooling (azul),
-  fixes (roxo), visual (azul)
-
-O canvas é JSON Canvas 1.0 compatível — abre nativamente no Obsidian sem plugins.
-
-### Formato de `implements`
-
-Use `[[wiki links]]` para que as relações apareçam no grafo nativo do Obsidian:
-
-```markdown
-## Relations
-- implements: [[Spec — nomenclature-shield]]
-- depends_on: [[Decisões Técnicas — phase-3a-nomenclature-shield-core]]
-- relates_to: [[Decisões Técnicas — phase-3-decomposition]]
-```
-
-O formato antigo (`implements: \`capability\``) continua aceito pelo regex do
-close-change.sh, mas não gera arestas no grafo.
-
-### Migração de notas existentes
-
-Para migrar notas antigas do formato code para wiki links, use o script
-`scripts/migrate-implements.sh` (criado na primeira execução do close-change.sh
-pós v1.3.0). Ele converte:
-
-```
-- implements: \`nomenclature-shield\` (openspec/specs/nomenclature-shield/spec.md)
-```
-
-Em:
-
-```
-- implements: [[Spec — nomenclature-shield]]
-```

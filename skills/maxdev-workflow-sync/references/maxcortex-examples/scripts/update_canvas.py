@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""update_canvas.py — Gera/atualiza o Knowledge Graph canvas do projeto.
+"""update_canvas.py — Gera/atualiza o canvas MAXCORTEX - Knowledge Graph.
 
-Lê o índice do projeto, notas de decisão e specs do Basic Memory,
+Lê o índice MAXCORTEX.md, notas de decisão e specs do Basic Memory,
 extrai relações e gera um JSON Canvas 1.0 compatível com Obsidian.
 
-Uso: python3 scripts/update_canvas.py [--dry-run]
+Uso: uv run python scripts/update_canvas.py [--dry-run]
 """
 
 import json
@@ -27,51 +27,58 @@ INDEX_FILE = None  # Será detectado automaticamente
 
 # Cores por domínio (IDs 1-6 do Obsidian)
 COLORS = {
-    "index": "1",       # vermelho — índice central
-    "core": "2",        # laranja — foundation/core
-    "features": "3",    # verde — features
-    "tooling": "4",     # azul — tooling/infra
+    "index": "1",       # vermelho
+    "infra": "2",       # laranja
+    "core": "2",        # laranja
+    "nomenclature": "3", # verde
+    "tooling": "4",     # azul
     "visual": "4",      # azul
-    "fixes": "5",       # roxo — fixes
-    "spec": "6",        # cinza — specs
+    "fix": "5",         # roxo
+    "spec": "6",        # cinza
 }
 
-# Layout por domínio (X base, Y base)
+# Layout: coordenadas por domínio (Y base)
 DOMAIN_POSITIONS = {
     "index": (600, 0),
-    "core": (-20, 180),
-    "features": (-20, 360),
+    "infra": (-20, 180),
+    "nomenclature": (-20, 360),
     "tooling": (-20, 540),
     "visual": (-20, 720),
-    "fixes": (1060, 180),
+    "fix": (1060, 180),
 }
 
 DOMAIN_COLUMNS = {
     "index": 1,
-    "core": 3,
-    "features": 3,
+    "infra": 3,
+    "nomenclature": 3,
     "tooling": 3,
     "visual": 1,
-    "fixes": 1,
+    "fix": 1,
 }
 
 
 def classify_domain(tags: list[str], title: str) -> str:
-    """Classifica uma decisão em um domínio genérico baseado em tags e título."""
+    """Classifica uma decisão em um domínio baseado em tags e título."""
     tag_str = " ".join(tags).lower()
     title_lower = title.lower()
 
-    if any(t in title_lower for t in ["fix", "bug", "error", "hotfix"]):
-        return "fixes"
-    if any(t in title_lower for t in ["redesign", "visual", "ui", "shell", "css"]):
-        return "visual"
-    if any(t in tag_str for t in ["devops", "ci", "sync", "config", "workflow"]):
+    if "fix" in title_lower or "turbopack" in tag_str or "error" in tag_str:
+        return "fix"
+    if "phase-3" in tag_str or "nomenclature" in tag_str or "nomenclatura" in tag_str:
+        return "nomenclature"
+    if "phase-0" in tag_str or "phase-1" in tag_str or "foundation" in tag_str or "pipeline" in tag_str or "guardrails" in tag_str:
+        return "infra"
+    if "nucleo" in tag_str or "agentico" in tag_str or "decomposition" in tag_str:
+        return "infra"
+    if "label" in title_lower or "frontend" in tag_str:
         return "tooling"
-    if any(t in tag_str for t in ["foundation", "setup", "init", "bootstrap"]):
-        return "core"
-    if any(t in tag_str for t in ["feature", "pipeline", "module", "api", "integration", "service", "component"]):
-        return "features"
-    return "core"
+    if "brutal" in title_lower or "redesign" in tag_str or "shell" in tag_str:
+        return "visual"
+    if "settings" in title_lower or "org" in tag_str:
+        return "tooling"
+    if "preview" in title_lower or "integrate" in tag_str or "context-tracker" in tag_str:
+        return "nomenclature"
+    return "infra"
 
 
 def parse_frontmatter(content: str) -> dict:
@@ -126,8 +133,8 @@ def discover_index() -> Path | None:
     return None
 
 
-def build_canvas() -> tuple[dict, str]:
-    """Constrói o canvas completo. Retorna (canvas_dict, index_name)."""
+def build_canvas() -> dict:
+    """Constrói o canvas completo."""
     nodes = []
     edges = []
 
@@ -280,13 +287,13 @@ def build_canvas() -> tuple[dict, str]:
                     "label": "implements",
                 })
 
-    return {"nodes": nodes, "edges": edges}, idx_name
+    return {"nodes": nodes, "edges": edges}
 
 
 def main():
     dry_run = "--dry-run" in sys.argv
 
-    canvas, idx_name = build_canvas()
+    canvas = build_canvas()
 
     if dry_run:
         print(json.dumps(canvas, indent=2, ensure_ascii=False))
@@ -294,7 +301,7 @@ def main():
         return
 
     CANVAS_DIR.mkdir(parents=True, exist_ok=True)
-    canvas_file = CANVAS_DIR / f"{idx_name} - Knowledge Graph.canvas"
+    canvas_file = CANVAS_DIR / "MAXCORTEX - Knowledge Graph.canvas"
 
     with open(canvas_file, "w") as f:
         json.dump(canvas, f, indent=2, ensure_ascii=False)

@@ -74,7 +74,6 @@ Para tooling/docs sem mudança de produto, declare `skip_specs: true` e pule spe
 
 ## Convenções do Projeto
 
-<!-- {{PROJECT_CONVENTIONS}} — substitua pelos valores reais do seu projeto. -->
 - Linguagem: {{LANG_BACKEND}} (backend), {{LANG_FRONTEND}} (frontend)
 - Gestor de pacotes: {{PKG_MANAGER_BACKEND}} (backend), {{PKG_MANAGER_FRONTEND}} (frontend)
 - Framework: {{FRAMEWORK_BACKEND}} (backend), {{FRAMEWORK_FRONTEND}} (frontend)
@@ -114,5 +113,3 @@ Detalhes completos em `dev-workflow.md §6` (archive e Basic Memory).
 - `.pre-commit-config.yaml` — hooks `block-main` (pre-commit) e `block-main-push` (pre-push).
 - `.gitignore` — seção delimitada entre markers `# >>> maxdev-workflow-sync >>>` / `# <<< maxdev-workflow-sync <<<` é re-syncada. Custom acima/abaixo preservado.
 - `.editorconfig` — UTF-8/LF/indent 4-Python-2-TS.
-
-<!-- {{OPTIONAL_REFERENCES}} — adicione referências extras do seu projeto aqui (ex.: `TESTING.md`). -->

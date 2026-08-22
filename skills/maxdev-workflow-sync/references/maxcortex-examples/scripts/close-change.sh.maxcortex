@@ -59,6 +59,8 @@ fi
 CHANGE="$1"
 ARCHIVED="openspec/changes/archive/$CHANGE"
 ACTIVE="openspec/changes/$CHANGE"
+PROJECT_UPPER=$(basename "$(pwd)" | tr '[:lower:]' '[:upper:]')
+PROJECT_LOWER=$(echo "$PROJECT_UPPER" | tr '[:upper:]' '[:lower:]')
 
 # ---------- helpers ----------
 
@@ -142,12 +144,14 @@ if [[ "$ADMIN_MODE" == "false" ]]; then
 fi
 
 # nota no basic-memory (exige título exato "Decisões Técnicas — <change>")
+# Valida via filesystem (.md é mirror do DB pelo write_note) — ~2600x mais rápido que CLI
 NOTE_TITLE="Decisões Técnicas — $CHANGE"
-if ! basic-memory tool search-notes "$NOTE_TITLE" 2>/dev/null | jq -r '.results[].title' | grep -qF "$NOTE_TITLE"; then
-  abort "Nota 'Decisões Técnicas — $CHANGE' não encontrada no Basic Memory. Crie-a via basic-memory write_note antes do closeout."
+NOTE_FILE="memories/Decisões Técnicas — $CHANGE.md"
+if [[ ! -f "$NOTE_FILE" ]]; then
+  abort "Nota 'Decisões Técnicas — $CHANGE' não encontrada em memories/. Crie-a via basic-memory write_note --title \"$NOTE_TITLE\" --folder / --overwrite antes do closeout."
 fi
 
-# valida specs quando capabilities declaradas (só modo não-admin)
+# valida que specs existem quando capabilities são declaradas (só modo não-admin)
 if [[ "$ADMIN_MODE" == "false" ]] && [[ -f "$ACTIVE/proposal.md" ]]; then
   CAP_COUNT=$(grep -c $'^- \x60[a-z].*\x60:' "$ACTIVE/proposal.md" 2>/dev/null || true)
   if [[ "$CAP_COUNT" -gt 0 ]]; then
@@ -160,8 +164,24 @@ if [[ "$ADMIN_MODE" == "false" ]] && [[ -f "$ACTIVE/proposal.md" ]]; then
       if [[ "$SPEC_COUNT" -lt "$CAP_COUNT" ]]; then
         abort "Change '$CHANGE' declara $CAP_COUNT capabilities no proposal.md mas só tem $SPEC_COUNT spec(s). Crie as specs faltantes."
       fi
+
+      # valida implements relations na nota do Basic Memory
+      IMPLEMENTS_COUNT=$(grep -cE '^- implements:' "$NOTE_FILE" 2>/dev/null || true)
+      if [[ "$IMPLEMENTS_COUNT" -lt "$SPEC_COUNT" ]]; then
+        abort "Change '$CHANGE' tem $SPEC_COUNT spec(s) delta mas a nota tem apenas $IMPLEMENTS_COUNT relação(ões) 'implements'. Atualize a nota com '- implements: \`<capability>\` (openspec/specs/<capability>/spec.md)' para cada spec."
+      fi
     fi
   fi
+fi
+
+# valida índice central do projeto (ex: MAXCORTEX.md)
+INDEX_FILE="memories/${PROJECT_UPPER}.md"
+DECISION_LINK="[[Decisões Técnicas — $CHANGE]]"
+if [[ ! -f "$INDEX_FILE" ]]; then
+  abort "Índice '$PROJECT_UPPER' não encontrado em memories/. Crie-o via basic-memory write_note antes do closeout."
+fi
+if ! grep -qF "$DECISION_LINK" "$INDEX_FILE" 2>/dev/null; then
+  abort "Índice '$PROJECT_UPPER' não referencia esta change. Adicione '$DECISION_LINK' ao índice antes do closeout."
 fi
 
 # PR merged (modo não-admin)
@@ -195,7 +215,7 @@ mark_task_done() {
   return 1
 }
 
-mark_task_done "$TASKS_FILE"
+mark_task_done "$TASKS_FILE" || true
 
 # ---------- modo admin: PR só com correção ----------
 
@@ -209,10 +229,10 @@ if [[ "$ADMIN_MODE" == "true" ]]; then
   git checkout -b "$CHASER"
   git add "$TASKS_FILE"
   git commit -m "docs(openspec): corrige auditoria tasks<N> de $CHANGE (closeout [x])"
-  git push -u origin "$CHASER" 2>&1 | tail -3 || abort "push admin falhou"
+  git push -u origin "$CHASER" 2>&1 | rtk tail -3 || abort "push admin falhou"
   gh pr create --base main --head "$CHASER" \
     --title "chore(openspec): corrige auditoria tasks de $CHANGE" \
-    --body "Correção admin (não regressão): as tasks N.8/N.9 (GATE 4 aguardar merge) foram arquivadas sem marcação [x] quando \`openspec archive\` moveu o arquivo. Esta PR atualiza o livro-razão." \
+    --body "Correção admin (não regressão): as tasks N.8/N.9 (GATE 4 aguardar merge) foram arquivadas sem marcação [x] quando \`openspec archive\` moveu o arquivo. Esta PR atualiza o livro-razão. Justificado em D5 do design de enforce-closeout-gate." \
     || abort "gh pr create admin falhou"
   echo "✓ PR admin criado. AGUARDE o merge humano."
   echo "  Após merge: $0 --post-merge $CHANGE"
@@ -224,38 +244,62 @@ fi
 step "3/7" "Rodando openspec archive $CHANGE..."
 openspec archive -y "$CHANGE"
 
-# ---------- [3.5] spec mirror notes via Basic Memory CLI ----------
+# ---------- [3.5] spec mirror notes + canvas ----------
 
-step "3.5" "Criando/atualizando spec mirror notes no Basic Memory..."
+step "3.5" "Atualizando spec mirror notes e canvas..."
 
-# Para cada spec em openspec/specs/, cria/atualiza nota-espelho via BM CLI
+NOTE_TITLE="Decisões Técnicas — $CHANGE"
+NOTE_FILE="memories/Decisões Técnicas — $CHANGE.md"
+
+# Para cada spec em openspec/specs/, cria/atualiza nota-espelho
 if [[ -d "openspec/specs" ]]; then
   for spec_dir in openspec/specs/*/; do
     spec_name=$(basename "$spec_dir")
-    spec_file="openspec/specs/$spec_name/spec.md"
-    
-    if [[ -f "$spec_file" ]]; then
-      spec_content=$(cat "$spec_file")
-      spec_title="Spec — $spec_name"
-      
-      # Cria/atualiza nota no Basic Memory via CLI (sincroniza DB + filesystem)
-      basic-memory write_note \
-        --title "$spec_title" \
-        --content "$spec_content" \
-        --type spec \
-        --tags "spec,${PROJECT_NAME_LOWER:-project},$spec_name" \
-        --metadata "{\"source\": \"$spec_file\"}" \
-        --overwrite \
-        --directory "/" \
-        >/dev/null 2>&1 && echo "  ✓ $spec_title" || echo "  ⚠ falha ao criar $spec_title"
-    fi
+    spec_title="Spec — $spec_name"
+    spec_file="memories/Spec — $spec_name.md"
+
+    # Coleta decisões que implementam esta spec
+    implements_list=""
+    for dec_file in memories/Decisões\ Técnicas*.md; do
+      [[ -f "$dec_file" ]] || continue
+      dec_title=$(basename "$dec_file" .md)
+      if grep -qE "implements:.*\[\[Spec\s*[—–-]\s*$spec_name\]\]" "$dec_file" 2>/dev/null || \
+         grep -qE "implements:.*\`$spec_name\`" "$dec_file" 2>/dev/null; then
+        implements_list+="- [[$dec_title]]
+"
+      fi
+    done
+
+    # Cria/atualiza a nota
+    cat > "$spec_file" << SPECEOF
+---
+title: $spec_title
+type: spec
+permalink: $PROJECT_LOWER/$(echo "$spec_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g; s/--*/-/g')
+tags:
+- spec
+- $PROJECT_LOWER
+- $spec_name
+source: openspec/specs/$spec_name/spec.md
+---
+
+# $spec_title
+
+Spec delta consolidado em \`openspec/specs/$spec_name/spec.md\`.
+
+## Implementado por
+$implements_list
+SPECEOF
+    echo "  ✓ $spec_title"
   done
 fi
 
-# Regenera canvas se script existir (opcional, project-specific)
+# Regenera canvas
 if [[ -f "scripts/update-canvas.sh" ]]; then
-  step "3.6" "Regenerando canvas (script opcional)..."
-  bash scripts/update-canvas.sh 2>&1 | sed 's/^/  /' && echo "  ✓ Canvas atualizado" || echo "  ⚠ canvas falhou (opcional)"
+  bash scripts/update-canvas.sh 2>&1 | sed 's/^/  /'
+  if [[ -f "memories/canvas/${PROJECT_UPPER} - Knowledge Graph.canvas" ]]; then
+    echo "  ✓ Canvas atualizado"
+  fi
 fi
 
 # ---------- [4/7] commit chaser ----------
@@ -275,11 +319,11 @@ git commit -m "chore(openspec): arquiva change $CHANGE"
 # ---------- [5/7] PR chaser ----------
 
 step "5/7" "Abrindo PR chaser (GATE 3 — aguarde merge humano)..."
-git push -u origin "$CHASER" 2>&1 | tail -3 || abort "push chaser falhou"
+git push -u origin "$CHASER" 2>&1 | rtk tail -3 || abort "push chaser falhou"
 
 gh pr create --base main --head "$CHASER" \
   --title "chore(openspec): arquiva $CHANGE" \
-  --body "Closeout da change \`$CHANGE\` — mergeia deltas em openspec/specs/, cria spec mirror notes no Basic Memory, e move a change para archive/. Orquestrado por \`./scripts/close-change.sh\` (GATE 4 do fluxo MaxDev)." \
+  --body "Closeout da change \`$CHANGE\` — mergeia deltas em openspec/specs/, cria spec mirror notes + canvas, e move a change para archive/. Orquestrado por \`./scripts/close-change.sh\` (GATE 4 do fluxo MaxDev)." \
   || abort "gh pr create chaser falhou"
 
 echo
