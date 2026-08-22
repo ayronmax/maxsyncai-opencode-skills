@@ -1,6 +1,8 @@
 # AGENTS.md — Contrato Operacional
 
-> Gerado por `maxdev-workflow-sync` v1.3.0.
+> Template gerado por `maxdev-workflow-sync` v{{WORKFLOW_VERSION}}.
+> Substitua os placeholders `{{...}}` pelos valores do seu projeto.
+> Campos entre `<...>` são instruções de preenchimento.
 
 Este projeto segue o fluxo **OpenSpec** em 6 fases:
 `explore → propose → apply → verify → PR → archive`.
@@ -72,11 +74,12 @@ Para tooling/docs sem mudança de produto, declare `skip_specs: true` e pule spe
 
 ## Convenções do Projeto
 
-- Linguagem: Python 3.12 (backend), TypeScript (frontend)
-- Gestor de pacotes: uv (backend), npm (frontend)
-- Framework: FastAPI + LangGraph v1.2+ / DeepAgents v0.7+ (backend), Next.js 16 (frontend)
-- Framework de testes: pytest (backend), vitest (frontend)
-- Linter: ruff (backend), eslint (frontend)
+<!-- {{PROJECT_CONVENTIONS}} — substitua pelos valores reais do seu projeto. -->
+- Linguagem: {{LANG_BACKEND}} (backend), {{LANG_FRONTEND}} (frontend)
+- Gestor de pacotes: {{PKG_MANAGER_BACKEND}} (backend), {{PKG_MANAGER_FRONTEND}} (frontend)
+- Framework: {{FRAMEWORK_BACKEND}} (backend), {{FRAMEWORK_FRONTEND}} (frontend)
+- Framework de testes: {{TEST_FRAMEWORK_BACKEND}} (backend), {{TEST_FRAMEWORK_FRONTEND}} (frontend)
+- Linter: {{LINTER_BACKEND}} (backend), {{LINTER_FRONTEND}} (frontend)
 - Commit: Conventional Commits (pt-BR); nunca direto na main (hooks bloqueiam)
 - Push seguro: `./scripts/push-safe.sh --fast` (desenv) / `--full` (pré-PR) / `--validate-only` (apenas schemas)
 - Idioma: código em inglês; UI em pt-BR; artefatos OpenSpec, docs internas e PRs em pt-BR
@@ -111,3 +114,5 @@ Detalhes completos em `dev-workflow.md §6` (archive e Basic Memory).
 - `.pre-commit-config.yaml` — hooks `block-main` (pre-commit) e `block-main-push` (pre-push).
 - `.gitignore` — seção delimitada entre markers `# >>> maxdev-workflow-sync >>>` / `# <<< maxdev-workflow-sync <<<` é re-syncada. Custom acima/abaixo preservado.
 - `.editorconfig` — UTF-8/LF/indent 4-Python-2-TS.
+
+<!-- {{OPTIONAL_REFERENCES}} — adicione referências extras do seu projeto aqui (ex.: `TESTING.md`). -->

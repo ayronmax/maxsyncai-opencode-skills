@@ -643,11 +643,13 @@ propaga (após bump de versão e redistribute). Regra prática:
 | 1.2.2 | 2026-08-06 | Fix B2 `.gitignore` visível no `--check` (drift check + bug falso MODIFY-G) |
 | 1.2.3 | 2026-08-06 | Fix `.gitignore` npm-blacklist — rename p/ `gitignore.template` (escapa packing npm) |
 | 1.2.4 | 2026-08-06 | Fix UX — separação MODE×FORCE: `--check` read-only garantido (ordem-agnóstico), aviso explícito em `--apply` demote |
+| 1.3.0 | 2026-08-22 | AGENTS enxuto (-62% tokens), 5 gates (0-4), spec mirrors, canvas, genericidade cross-project |
+| 1.3.1 | 2026-08-22 | Restore generic placeholders in AGENTS.md & config.yaml (v1.3.0 had MaxCortex-specific hardcoded values) |
 
 ---
 
 ## Versão
 
-`workflow.version`: **1.2.4** — bump semver a cada mudança de contrato nos 9
+`workflow.version`: **1.3.1** — bump semver a cada mudança de contrato nos 9
 canônicos ou no comportamento do `sync-workflow.sh`. Projetos detectam
 drift comparando com `workflow_version` em `openspec/config.yaml`.
