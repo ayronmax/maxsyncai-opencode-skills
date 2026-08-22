@@ -245,6 +245,12 @@ A skill **não assume** estrutura fixa do openspec upstream:
 
 ## Changelog
 
+### v1.3.1 — Restore generic placeholders in canonical templates
+
+- **AGENTS.md**: Restored placeholders (`{{LANG_BACKEND}}`, `{{FRAMEWORK_BACKEND}}`, `{{PKG_MANAGER_BACKEND}}`, etc.) that were accidentally hardcoded with MaxCortex-specific values in v1.3.0. Kept v1.3.0 improvements: 5 gates (0-4), `{{PROJECT_NAME_UPPER}}`, spec mirrors docs, wiki links format.
+- **openspec/config.yaml**: Restored generic context template with all `{{...}}` placeholders. Removed MaxCortex-specific context (PII Shield, Nomenclature Shield, embeddings config, streaming, Alembic rules). Kept v1.3.0 rule structure including closeout rule for spec mirrors.
+- **workflow.version**: Bumped to 1.3.1.
+
 ### v1.3.0 — AGENTS enxuto, spec mirrors, 5 gates, genericidade
 
 - **AGENTS.md**: 299→~120 linhas (-62% tokens/sessão). Contrato enxuto com apenas fluxo, gates (0-4), ferramentas, convenções. Detalhes operacionais no dev-workflow.md.
