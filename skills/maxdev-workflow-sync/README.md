@@ -646,11 +646,12 @@ propaga (após bump de versão e redistribute). Regra prática:
 | 1.3.0 | 2026-08-22 | AGENTS enxuto (-62% tokens), 5 gates (0-4), spec mirrors, canvas, genericidade cross-project |
 | 1.3.1 | 2026-08-22 | Restore generic placeholders in AGENTS.md & config.yaml (v1.3.0 had MaxCortex-specific hardcoded values) |
 | 1.3.2 | 2026-08-22 | **Genericidade cross-project restaurada**: templates em `assets/` voltam a ser genéricos (placeholders `{{...}}`). Exemplo MaxCortex movido para `references/maxcortex-examples/`. `close-change.sh` genérico: validação via BM CLI, spec mirrors via `basic-memory_write_note`, canvas opcional. `push-safe.sh` usa `make test-*` genéricos. `config.yaml` sem seção `closeout` project-specific. Bump `workflow.version` → 1.3.2. |
+| 1.3.3 | 2026-08-22 | **Canvas removido, grafo nativo, validações fail-fast**: Canvas heurístico removido (`update-canvas.sh`, `update_canvas.py`, step 3.6). Grafo nativo do Obsidian via wikilinks `[[Spec — X]]` substitui visualização. `close-change.sh` step 1/7 harden: valida spec mirrors no BM DB, decisions com conteúdo + implements, wikilinks resolvidos. Novo `verify-graph.sh` standalone (closeout + CI). `references/maxcortex-examples/` com exemplos documentados. Bump `workflow.version` → 1.3.3. |
 
 ---
 
 ## Versão
 
-`workflow.version`: **1.3.2** — bump semver a cada mudança de contrato nos 9
+`workflow.version`: **1.3.3** — bump semver a cada mudança de contrato nos 9
 canônicos ou no comportamento do `sync-workflow.sh`. Projetos detectam
 drift comparando com `workflow_version` em `openspec/config.yaml`.

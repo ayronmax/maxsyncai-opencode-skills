@@ -10,11 +10,12 @@
 #   - Você está na branch main, sincronizada, working tree limpa.
 #   - A nota "Decisões Técnicas — <change>" existe no Basic Memory.
 #
-# O que faz (modo padrão, 7 steps, idempotente):
+# O que faz (modo padrão, 6 steps, idempotente):
 #   [1/7] Valida auditoria antes de mover (tasks 100% [x], openspec(validate|doctor),
 #         git limpo e sincronizado, PR merged, nota no Basic Memory).
 #   [2/7] Marca N.8 (GATE 4) e N.9 (opsx-archive-change) como [x] em tasks.md.
 #   [3/7] Roda `openspec archive <change>` (mergeea deltas e move para archive/).
+#   [3.5] Cria/atualiza spec mirror notes no Basic Memory via basic-memory tool write-note.
 #   [4/7] Cria branch canônica chore/archive-<change> e commit do closeout.
 #   [5/7] Abre PR chaser (base main) e pausa em GATE 3 humano.
 #
@@ -250,12 +251,6 @@ if [[ -d "openspec/specs" ]]; then
         >/dev/null 2>&1 && echo "  ✓ $spec_title" || echo "  ⚠ falha ao criar $spec_title"
     fi
   done
-fi
-
-# Regenera canvas se script existir (opcional, project-specific)
-if [[ -f "scripts/update-canvas.sh" ]]; then
-  step "3.6" "Regenerando canvas (script opcional)..."
-  bash scripts/update-canvas.sh 2>&1 | sed 's/^/  /' && echo "  ✓ Canvas atualizado" || echo "  ⚠ canvas falhou (opcional)"
 fi
 
 # ---------- [4/7] commit chaser ----------

@@ -31,7 +31,7 @@ explore ─▶ propose ─▶ [GATE 1: aprovar change] ─▶ apply
 - **apply** — implementar as tasks do `tasks.md` em ordem com `/opsx-apply-change`, marcando `- [x]` a cada conclusão.
 - **verify** — validar com `/opsx-verify-change` + `make test*` + `make lint` + `openspec validate`/`doctor` + `push-safe.sh` como comandos explícitos, fora do skill `apply`.
 - **PR** — abrir com `gh pr create` (base `main`, head `feature/<change>`, body em pt-BR), revisar diff com IA, pausar em GATE 3.
-- **archive** — só após merge: `./scripts/close-change.sh <change>` (orquestra `openspec archive` + chaser PR + limpeza de branches + spec mirrors + canvas).
+- **archive** — só após merge: `./scripts/close-change.sh <change>` (orquestra `openspec archive` + chaser PR + limpeza de branches + spec mirrors).
 
 Se a implementação revelar problema de design, **pausar e atualizar os artefatos** — nunca contornar no código.
 

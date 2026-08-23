@@ -245,6 +245,14 @@ A skill **não assume** estrutura fixa do openspec upstream:
 
 ## Changelog
 
+### v1.3.3 — Canvas removido, grafo nativo, validações fail-fast
+
+- **Canvas removido**: `update-canvas.sh`, `update_canvas.py`, `migrate_implements.py` removidos de `assets/`. Step 3.6 (canvas) removido de `close-change.sh`. Grafo nativo do Obsidian via wikilinks `[[Spec — X]]` substitui visualização heurística.
+- **close-change.sh harden**: Step 1/7 agora valida: spec mirrors no BM DB (`basic-memory tool search-notes`), decisions com conteúdo mínimo + `implements` válidos, wikilinks `[[Spec — X]]` e `[[Decisões Técnicas — Y]]` resolvidos. Fail-fast antes do archive.
+- **verify-graph.sh**: Novo script standalone (`scripts/verify-graph.sh`) com flags `--dry-run`/`--ci`. Valida spec mirrors, relations implements/depends_on/relates_to, conteúdo mínimo decisions. Integrável no closeout + CI/CD.
+- **references/maxcortex-examples/**: Exemplos MaxCortex documentados (close-change.sh.maxcortex, push-safe.sh.maxcortex, verify-graph.sh, config.yaml.maxcortex).
+- **workflow.version**: Bumped to 1.3.3.
+
 ### v1.3.2 — Genericidade cross-project restaurada (templates limpos)
 
 - **assets/AGENTS.md, dev-workflow.md, config.yaml**: Restaurados placeholders `{{...}}` genéricos. Removidos valores hardcoded MaxCortex que vazaram em v1.3.1.

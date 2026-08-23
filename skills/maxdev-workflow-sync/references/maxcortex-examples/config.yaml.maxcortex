@@ -80,4 +80,4 @@ rules:
 # NÃO definir aqui — o sync-workflow.sh adiciona/atualiza esta chave
 # automaticamente com base em assets/workflow.version da skill.
 # workflow_version: <preenchido pela skill maxdev-workflow-sync>
-workflow_version: 1.3.1
+workflow_version: 1.3.2
