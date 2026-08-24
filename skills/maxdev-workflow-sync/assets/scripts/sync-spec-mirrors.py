@@ -2,7 +2,6 @@
 """Sync all spec mirrors to Basic Memory using KnowledgeClient directly.
 
 Robust, parallel, idempotent replacement for the slow sequential CLI loop.
-Usage: python3 sync-spec-mirrors.py --project <name> --specs-dir <path> [--concurrency N] [--retries N]
 """
 import argparse
 import asyncio

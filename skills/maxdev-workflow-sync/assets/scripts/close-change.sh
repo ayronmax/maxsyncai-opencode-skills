@@ -32,6 +32,15 @@
 #   ./scripts/close-change.sh <change-name>           # fluxo padrão (steps 1-5)
 #   ./scripts/close-change.sh --post-merge <change>   # steps 6-7 após merge do chaser
 #
+# Opções de validação customizada:
+#   --validate-hooks <script>     Script de validação customizado (executado no step 1/7)
+#   --index-file <path>           Arquivo de índice do projeto (padrão: memories/PROJECT_UPPER.md)
+#   --note-title-pattern <pattern> Padrão do título da nota (padrão: "Decisões Técnicas — %s")
+#   --min-content-lines <n>       Mínimo de linhas de conteúdo nas decision notes (padrão: 10)
+#   --skip-spec-mirror-check      Pula validação de spec mirrors no BM DB
+#   --skip-decision-note-check    Pula validação de decision notes
+#   --skip-index-check            Pula validação do índice do projeto
+#
 # Saída: exit 0 = ok; exit != 0 = abortou com mensagem.
 #
 # Robusto: set -e + set -u; falha em qualquer step aborta sem estado parcial
@@ -40,19 +49,85 @@
 
 set -eo pipefail
 
-# ---------- guardas ----------
+# ---------- parse args ----------
 
-if [[ $# -ge 1 && "$1" == "--post-merge" ]]; then
-  POST_MERGE=true
-  shift
-else
-  POST_MERGE=false
-fi
+VALIDATE_HOOKS=""
+INDEX_FILE_OVERRIDE=""
+NOTE_TITLE_PATTERN="Decisões Técnicas — %s"
+MIN_CONTENT_LINES=10
+SKIP_SPEC_MIRROR_CHECK=false
+SKIP_DECISION_NOTE_CHECK=false
+SKIP_INDEX_CHECK=false
+POST_MERGE=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --post-merge)
+      POST_MERGE=true
+      shift
+      ;;
+    --validate-hooks)
+      VALIDATE_HOOKS="$2"
+      shift 2
+      ;;
+    --index-file)
+      INDEX_FILE_OVERRIDE="$2"
+      shift 2
+      ;;
+    --note-title-pattern)
+      NOTE_TITLE_PATTERN="$2"
+      shift 2
+      ;;
+    --min-content-lines)
+      MIN_CONTENT_LINES="$2"
+      shift 2
+      ;;
+    --skip-spec-mirror-check)
+      SKIP_SPEC_MIRROR_CHECK=true
+      shift
+      ;;
+    --skip-decision-note-check)
+      SKIP_DECISION_NOTE_CHECK=true
+      shift
+      ;;
+    --skip-index-check)
+      SKIP_INDEX_CHECK=true
+      shift
+      ;;
+    -h|--help)
+      echo "Uso:"
+      echo "  $0 <change-name>                    # fluxo padrão (steps 1-5)"
+      echo "  $0 --post-merge <change>            # steps 6-7 após merge do chaser PR"
+      echo ""
+      echo "Opções de validação customizada:"
+      echo "  --validate-hooks <script>           Script de validação customizado"
+      echo "  --index-file <path>                 Arquivo de índice do projeto"
+      echo "  --note-title-pattern <pattern>      Padrão do título da nota (%%s = change)"
+      echo "  --min-content-lines <n>             Mínimo linhas de conteúdo nas decision notes"
+      echo "  --skip-spec-mirror-check            Pula validação spec mirrors no BM DB"
+      echo "  --skip-decision-note-check          Pula validação decision notes"
+      echo "  --skip-index-check                  Pula validação índice do projeto"
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "Opção desconhecida: $1" >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 if [[ $# -ne 1 ]]; then
   echo "Uso:"
-  echo "  $0 <change-name>            # fluxo padrão (steps 1-5)"
-  echo "  $0 --post-merge <change>    # steps 6-7 após merge do chaser PR"
+  echo "  $0 <change-name>                    # fluxo padrão (steps 1-5)"
+  echo "  $0 --post-merge <change>            # steps 6-7 após merge do chaser PR"
+  echo "  $0 --help                           # mostra ajuda completa"
   echo "Exemplo: $0 fix-timer-session-leak"
   exit 1
 fi
@@ -61,12 +136,25 @@ CHANGE="$1"
 ARCHIVED="openspec/changes/archive/$CHANGE"
 ACTIVE="openspec/changes/$CHANGE"
 
+# PROJECT_UPPER/LOWER derivados do nome do projeto (pasta atual)
+PROJECT_UPPER=$(basename "$(pwd)" | tr '[:lower:]' '[:upper:]')
+PROJECT_LOWER=$(echo "$PROJECT_UPPER" | tr '[:upper:]' '[:lower:]')
+
+# Resolve index file
+if [[ -n "$INDEX_FILE_OVERRIDE" ]]; then
+  INDEX_FILE="$INDEX_FILE_OVERRIDE"
+else
+  INDEX_FILE="memories/${PROJECT_UPPER}.md"
+fi
+
+# Resolve note title
+NOTE_TITLE=$(printf "$NOTE_TITLE_PATTERN" "$CHANGE")
+NOTE_FILE="memories/${NOTE_TITLE}.md"
+
 # ---------- helpers ----------
 
 step() { echo -e "\n[$1] $2"; }
 abort() { echo "✗ $*"; exit 1; }
-
-# ---------- pós-merge: steps 6-7 ----------
 
 if [[ "$POST_MERGE" == "true" ]]; then
   CHASER="chore/archive-$CHANGE"
@@ -142,10 +230,9 @@ if [[ "$ADMIN_MODE" == "false" ]]; then
   [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || abort "main não está sincronizada com origin/main"
 fi
 
-# nota no basic-memory (exige título exato "Decisões Técnicas — <change>")
-NOTE_TITLE="Decisões Técnicas — $CHANGE"
-if ! basic-memory tool search-notes "$NOTE_TITLE" 2>/dev/null | jq -r '.results[].title' | grep -qF "$NOTE_TITLE"; then
-  abort "Nota 'Decisões Técnicas — $CHANGE' não encontrada no Basic Memory. Crie-a via basic-memory write_note antes do closeout."
+# nota no basic-memory (exige título exato conforme pattern)
+if [[ ! -f "$NOTE_FILE" ]]; then
+  abort "Nota '$NOTE_TITLE' não encontrada em memories/. Crie-a via basic-memory write_note --title \"$NOTE_TITLE\" --folder / --overwrite antes do closeout."
 fi
 
 # valida specs quando capabilities declaradas (só modo não-admin)
@@ -171,9 +258,88 @@ if [[ "$ADMIN_MODE" == "false" ]]; then
   [[ "$PR_STATE" == "MERGED" ]] || abort "PR de implementação de '$CHANGE' (head feature/$CHANGE) não está MERGED (state='$PR_STATE'). GATE 3 ainda não cumprido."
 fi
 
-echo "✓ Auditoria validada."
+# Custom validation hooks (executados antes das validações built-in)
+if [[ -n "$VALIDATE_HOOKS" && -f "$VALIDATE_HOOKS" ]]; then
+  echo "  Executando validação customizada: $VALIDATE_HOOKS"
+  bash "$VALIDATE_HOOKS" "$CHANGE" "$ACTIVE" "$ARCHIVED" || abort "Validação customizada falhou"
+fi
 
-# ---------- [2/7] marcar closeout ----------
+# ---------- [1/7] validações extras: spec mirrors + decision notes + wikilinks ----------
+# Estas validações podem ser desabilitadas via flags
+
+# Spec mirror check
+if [[ "$SKIP_SPEC_MIRROR_CHECK" == "false" && -d "openspec/specs" ]]; then
+  step "1/7" "Validando spec mirrors no Basic Memory DB..."
+  SPEC_COUNT=$(find "openspec/specs" -name "spec.md" -type f | wc -l)
+  for spec_dir in openspec/specs/*/; do
+    spec_name=$(basename "$spec_dir")
+    spec_title="Spec — $spec_name"
+    if ! basic-memory tool search-notes --title "$spec_title" --type spec --page-size 1 2>/dev/null | jq -e '.results[0]' >/dev/null; then
+      abort "Spec mirror '$spec_title' não encontrado no Basic Memory DB. Rode sync antes do closeout."
+    fi
+  done
+  echo "  ✓ Todas as $SPEC_COUNT spec mirrors encontradas no BM DB"
+fi
+
+# Decision notes check
+if [[ "$SKIP_DECISION_NOTE_CHECK" == "false" ]]; then
+  step "1/7" "Validando decision notes (conteúdo + implements + wikilinks)..."
+  for decision_file in memories/Decisões\ Técnicas\ —\ *.md; do
+    [[ -f "$decision_file" ]] || continue
+
+    # 1. Conteúdo mínimo (excluindo frontmatter + Relations)
+    CONTENT_LINES=$(grep -vE '^(---|title:|type:|permalink:|# Relations|- implements|- depends_on|- relates_to)' "$decision_file" | grep -cvE '^\s*$' || true)
+    if [[ "$CONTENT_LINES" -lt "$MIN_CONTENT_LINES" ]]; then
+      abort "Decision note '$(basename "$decision_file")' tem conteúdo insuficiente ($CONTENT_LINES linhas). Mínimo: $MIN_CONTENT_LINES. Adicione resumo, decisões, riscos."
+    fi
+
+    # 2. Wikilinks implements válidos
+    for spec_link in $(grep -oE '\[\[Spec — [^]]+\]\]' "$decision_file" | sed 's/\[\[Spec — \(.*\)\]\]/\1/'); do
+      if [[ ! -d "openspec/specs/$spec_link" ]]; then
+        abort "Decision '$(basename "$decision_file")' referencia spec inexistente: '$spec_link'. Crie em openspec/specs/ ou remova da relation."
+      fi
+    done
+
+    # 3. Wikilinks depends_on/relates_to válidos
+    for dec_link in $(grep -oE '\[\[Decisões Técnicas — [^]]+\]\]' "$decision_file" | sed 's/\[\[Decisões Técnicas — \(.*\)\]\]/\1/'); do
+      if [[ ! -f "memories/Decisões Técnicas — $dec_link.md" ]]; then
+        abort "Decision '$(basename "$decision_file")' referencia decision inexistente: '$dec_link'. Verifique depends_on/relates_to."
+      fi
+    done
+
+    # 4. Pelo menos um implements se houver specs na change (modo não-admin)
+    if [[ "$ADMIN_MODE" == "false" ]] && [[ -f "$ACTIVE/proposal.md" ]]; then
+      CAP_COUNT=$(grep -c $'^- \x60[a-z].*\x60:' "$ACTIVE/proposal.md" 2>/dev/null || true)
+      if [[ "$CAP_COUNT" -gt 0 ]]; then
+        IMPLEMENTS_COUNT=$(grep -cE '^- implements:' "$decision_file" 2>/dev/null || true)
+        if [[ "$IMPLEMENTS_COUNT" -eq 0 ]]; then
+          abort "Decision note '$(basename "$decision_file")' não tem relations 'implements'. Adicione wikilinks [[Spec — X]]."
+        fi
+      fi
+    fi
+  done
+  echo "  ✓ Decision notes validadas"
+fi
+
+# Index file check
+if [[ "$SKIP_INDEX_CHECK" == "false" ]]; then
+  if [[ ! -f "$INDEX_FILE" ]]; then
+    abort "Índice '$INDEX_FILE' não encontrado em memories/. Crie-o via basic-memory write_note antes do closeout."
+  fi
+  DECISION_LINK="[[${NOTE_TITLE}]]"
+  if ! grep -qF "$DECISION_LINK" "$INDEX_FILE" 2>/dev/null; then
+    abort "Índice '$INDEX_FILE' não referencia esta change. Adicione '$DECISION_LINK' ao índice antes do closeout."
+  fi
+  echo "  ✓ Índice do projeto validado"
+fi
+
+# PR merged (modo não-admin)
+if [[ "$ADMIN_MODE" == "false" ]]; then
+  PR_STATE=$(gh pr list --state merged --head "feature/$CHANGE" --json state --jq '.[0].state' 2>/dev/null || echo "")
+  [[ "$PR_STATE" == "MERGED" ]] || abort "PR de implementação de '$CHANGE' (head feature/$CHANGE) não está MERGED (state='$PR_STATE'). GATE 3 ainda não cumprido."
+fi
+
+echo "✓ Auditoria validada."
 
 step "2/7" "Marcando N.8 (GATE 4) e N.9 (archive) como [x] em $TASKS_FILE..."
 
@@ -273,7 +439,7 @@ _sync_specs_bash() {
     local spec_name=$(basename "$(dirname "$spec_file")")
     local spec_content=$(cat "$spec_file")
     local spec_title="Spec — $spec_name"
-    local project_lower="${PROJECT_NAME_LOWER:-project}"
+    local project_lower="${PROJECT_NAME_LOWER:-$PROJECT_LOWER}"
 
     for attempt in 1 2 3; do
       if basic-memory write_note \
