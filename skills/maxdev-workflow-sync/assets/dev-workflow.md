@@ -393,6 +393,30 @@ Após merge do chaser PR, registre a decisão técnica no Basic Memory via
 As notas `Task N` existentes em `memories/` são **histórico** — não
 regenerar, não deletar.
 
+### Estratégias de Sync de Spec Mirrors (step 3.5 do close-change.sh)
+
+O `close-change.sh` suporta **duas estratégias** para sincronizar spec mirrors no Basic Memory:
+
+| Estratégia | Quando usar | Vantagens | Requisitos |
+|------------|-------------|-----------|------------|
+| **Python (KnowledgeClient direto)** | Projetos com Python 3.10+ | ~7x mais rápido (~25s vs 180s), retries reais, idempotente nativo, controle de concorrência via semáforo | Python 3.10+, `basic_memory` package instalado (`pip install basic-memory`), script `scripts/sync-spec-mirrors.py` presente |
+| **Bash + xargs (fallback)** | Projetos sem Python / ambientes restritos | Zero deps extras, portável, sempre disponível | `basic-memory` CLI, `xargs`, `bash` |
+
+**Detecção automática**: o `close-change.sh` detecta automaticamente qual estratégia usar:
+1. Se `scripts/sync-spec-mirrors.py` existe + Python 3.10+ → usa estratégia Python (preferida)
+2. Caso contrário → fallback bash com `xargs -P 10`
+
+**Performance típica (26 specs)**:
+| Estratégia | Tempo | Confiabilidade |
+|------------|-------|----------------|
+| Python (KnowledgeClient) | ~25s | Alta (retries reais, semáforo, idempotente) |
+| Bash (xargs + CLI) | ~180s+ (risco timeout) | Média (sem retry nativo, CLI overhead) |
+
+**Para usar a estratégia Python** no seu projeto:
+1. Adicione `scripts/sync-spec-mirrors.py` (copie de `assets/scripts/sync-spec-mirrors.py` do skill)
+2. Garanta `basic_memory` no ambiente: `pip install basic-memory` ou adicione ao `requirements.txt`/`pyproject.toml`
+3. O `close-change.sh` detecta e usa automaticamente
+
 ### Validação do Basic Memory
 
 ```bash

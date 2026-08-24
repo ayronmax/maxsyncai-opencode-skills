@@ -225,13 +225,37 @@ fi
 step "3/7" "Rodando openspec archive $CHANGE..."
 openspec archive -y "$CHANGE"
 
-# ---------- [3.5] spec mirror notes via Basic Memory (PARALELO) ----------
+# ---------- [3.5] spec mirror notes via Basic Memory (DUAL STRATEGY) ----------
+#
+# Estratégia 1 (preferida): Python script com KnowledgeClient direto
+#   - Requer: basic_memory package + Python 3.10+
+#   - Vantagem: ~7x mais rápido, retries reais, idempotente nativo
+# Estratégia 2 (fallback): bash + xargs + basic-memory CLI
+#   - Sempre disponível, zero deps extras
+#   - Mais lento, menos robusto
 
-step "3.5" "Sincronizando spec mirrors no Basic Memory (paralelo, com retries)..."
+step "3.5" "Sincronizando spec mirrors no Basic Memory (dual strategy)..."
 
-# Paraleliza com jobs em background + wait; controla concorrência via semáforo simples
-# Cada job: create → se 409/conflict, update via file_path; retries exponenciais (3x)
 if [[ -d "openspec/specs" ]]; then
+  # Estratégia 1: Python script (preferido — mais rápido e robusto)
+  if [[ -f "scripts/sync-spec-mirrors.py" ]] && command -v python3 >/dev/null 2>&1; then
+    echo "  Usando estratégia Python (KnowledgeClient direto, paralelo + retries)..."
+    if python3 scripts/sync-spec-mirrors.py --project "$PROJECT_LOWER" --specs-dir "openspec/specs" --concurrency 10 --retries 3; then
+      echo "  ✓ Sincronização concluída (Python strategy)"
+    else
+      echo "  ⚠ Python strategy falhou, tentando fallback bash..."
+      _sync_specs_bash
+    fi
+  else
+    # Estratégia 2: bash fallback (portável, zero deps)
+    _sync_specs_bash
+  fi
+fi
+
+# ---------- Função de fallback bash ----------
+
+_sync_specs_bash() {
+  echo "  Usando estratégia bash (xargs + basic-memory CLI, paralelo)..."
   spec_files=()
   while IFS= read -r -d '' file; do
     spec_files+=("$file")
@@ -239,66 +263,62 @@ if [[ -d "openspec/specs" ]]; then
 
   if [[ ${#spec_files[@]} -eq 0 ]]; then
     echo "  ℹ Nenhuma spec encontrada"
-  else
-    echo "  Encontradas ${#spec_files[@]} specs — sincronizando em paralelo (max 10 concorrentes)..."
-
-    # Função para sincronizar uma spec
-    sync_spec() {
-      local spec_file="$1"
-      local spec_name=$(basename "$(dirname "$spec_file")")
-      local spec_content=$(cat "$spec_file")
-      local spec_title="Spec — $spec_name"
-      local project_lower="${PROJECT_NAME_LOWER:-project}"
-
-      for attempt in 1 2 3; do
-        # Tenta criar
-        if basic-memory write_note \
-          --title "$spec_title" \
-          --content "$spec_content" \
-          --type spec \
-          --tags "spec,$project_lower,$spec_name" \
-          --metadata "{\"source\": \"$spec_file\"}" \
-          --overwrite \
-          --directory "/" \
-          >/dev/null 2>&1; then
-          echo "  ✓ $spec_title"
-          return 0
-        fi
-
-        # Se erro de conflito (already exists), tenta update via file_path
-        local file_path="Spec — $spec_name.md"
-        if basic-memory tool write_note \
-          --title "$spec_title" \
-          --content "$spec_content" \
-          --type spec \
-          --tags "spec,$project_lower,$spec_name" \
-          --metadata "{\"source\": \"$spec_file\"}" \
-          --overwrite \
-          --directory "/" \
-          >/dev/null 2>&1; then
-          echo "  ✓ $spec_title (atualizado)"
-          return 0
-        fi
-
-        # Retry com backoff exponencial
-        if [[ $attempt -lt 3 ]]; then
-          sleep $((2 ** (attempt - 1)))
-        fi
-      done
-
-      echo "  ⚠ $spec_title (falhou após 3 tentativas)"
-      return 1
-    }
-
-    export -f sync_spec
-    export PROJECT_NAME_LOWER
-
-    # Executa em paralelo com xargs -P (máx 10 jobs)
-    printf '%s\0' "${spec_files[@]}" | xargs -0 -P 10 -I {} bash -c 'sync_spec "$@"' _ {} || true
-
-    echo "  Concluído."
+    return 0
   fi
-fi
+
+  echo "  Encontradas ${#spec_files[@]} specs — sincronizando em paralelo (max 10 concorrentes)..."
+
+  sync_spec() {
+    local spec_file="$1"
+    local spec_name=$(basename "$(dirname "$spec_file")")
+    local spec_content=$(cat "$spec_file")
+    local spec_title="Spec — $spec_name"
+    local project_lower="${PROJECT_NAME_LOWER:-project}"
+
+    for attempt in 1 2 3; do
+      if basic-memory write_note \
+        --title "$spec_title" \
+        --content "$spec_content" \
+        --type spec \
+        --tags "spec,$project_lower,$spec_name" \
+        --metadata "{\"source\": \"$spec_file\"}" \
+        --overwrite \
+        --directory "/" \
+        >/dev/null 2>&1; then
+        echo "  ✓ $spec_title"
+        return 0
+      fi
+
+      local file_path="Spec — $spec_name.md"
+      if basic-memory tool write_note \
+        --title "$spec_title" \
+        --content "$spec_content" \
+        --type spec \
+        --tags "spec,$project_lower,$spec_name" \
+        --metadata "{\"source\": \"$spec_file\"}" \
+        --overwrite \
+        --directory "/" \
+        >/dev/null 2>&1; then
+        echo "  ✓ $spec_title (atualizado)"
+        return 0
+      fi
+
+      if [[ $attempt -lt 3 ]]; then
+        sleep $((2 ** (attempt - 1)))
+      fi
+    done
+
+    echo "  ⚠ $spec_title (falhou após 3 tentativas)"
+    return 1
+  }
+
+  export -f sync_spec
+  export PROJECT_NAME_LOWER
+
+  printf '%s\0' "${spec_files[@]}" | xargs -0 -P 10 -I {} bash -c 'sync_spec "$@"' _ {} || true
+
+  echo "  Concluído (bash strategy)."
+}
 
 # ---------- [4/7] commit chaser ----------
 
