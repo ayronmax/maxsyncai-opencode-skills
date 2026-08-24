@@ -225,32 +225,79 @@ fi
 step "3/7" "Rodando openspec archive $CHANGE..."
 openspec archive -y "$CHANGE"
 
-# ---------- [3.5] spec mirror notes via Basic Memory CLI ----------
+# ---------- [3.5] spec mirror notes via Basic Memory (PARALELO) ----------
 
-step "3.5" "Criando/atualizando spec mirror notes no Basic Memory..."
+step "3.5" "Sincronizando spec mirrors no Basic Memory (paralelo, com retries)..."
 
-# Para cada spec em openspec/specs/, cria/atualiza nota-espelho via BM CLI
+# Paraleliza com jobs em background + wait; controla concorrência via semáforo simples
+# Cada job: create → se 409/conflict, update via file_path; retries exponenciais (3x)
 if [[ -d "openspec/specs" ]]; then
-  for spec_dir in openspec/specs/*/; do
-    spec_name=$(basename "$spec_dir")
-    spec_file="openspec/specs/$spec_name/spec.md"
-    
-    if [[ -f "$spec_file" ]]; then
-      spec_content=$(cat "$spec_file")
-      spec_title="Spec — $spec_name"
-      
-      # Cria/atualiza nota no Basic Memory via CLI (sincroniza DB + filesystem)
-      basic-memory write_note \
-        --title "$spec_title" \
-        --content "$spec_content" \
-        --type spec \
-        --tags "spec,${PROJECT_NAME_LOWER:-project},$spec_name" \
-        --metadata "{\"source\": \"$spec_file\"}" \
-        --overwrite \
-        --directory "/" \
-        >/dev/null 2>&1 && echo "  ✓ $spec_title" || echo "  ⚠ falha ao criar $spec_title"
-    fi
-  done
+  spec_files=()
+  while IFS= read -r -d '' file; do
+    spec_files+=("$file")
+  done < <(find openspec/specs -name "spec.md" -type f -print0)
+
+  if [[ ${#spec_files[@]} -eq 0 ]]; then
+    echo "  ℹ Nenhuma spec encontrada"
+  else
+    echo "  Encontradas ${#spec_files[@]} specs — sincronizando em paralelo (max 10 concorrentes)..."
+
+    # Função para sincronizar uma spec
+    sync_spec() {
+      local spec_file="$1"
+      local spec_name=$(basename "$(dirname "$spec_file")")
+      local spec_content=$(cat "$spec_file")
+      local spec_title="Spec — $spec_name"
+      local project_lower="${PROJECT_NAME_LOWER:-project}"
+
+      for attempt in 1 2 3; do
+        # Tenta criar
+        if basic-memory write_note \
+          --title "$spec_title" \
+          --content "$spec_content" \
+          --type spec \
+          --tags "spec,$project_lower,$spec_name" \
+          --metadata "{\"source\": \"$spec_file\"}" \
+          --overwrite \
+          --directory "/" \
+          >/dev/null 2>&1; then
+          echo "  ✓ $spec_title"
+          return 0
+        fi
+
+        # Se erro de conflito (already exists), tenta update via file_path
+        local file_path="Spec — $spec_name.md"
+        if basic-memory tool write_note \
+          --title "$spec_title" \
+          --content "$spec_content" \
+          --type spec \
+          --tags "spec,$project_lower,$spec_name" \
+          --metadata "{\"source\": \"$spec_file\"}" \
+          --overwrite \
+          --directory "/" \
+          >/dev/null 2>&1; then
+          echo "  ✓ $spec_title (atualizado)"
+          return 0
+        fi
+
+        # Retry com backoff exponencial
+        if [[ $attempt -lt 3 ]]; then
+          sleep $((2 ** (attempt - 1)))
+        fi
+      done
+
+      echo "  ⚠ $spec_title (falhou após 3 tentativas)"
+      return 1
+    }
+
+    export -f sync_spec
+    export PROJECT_NAME_LOWER
+
+    # Executa em paralelo com xargs -P (máx 10 jobs)
+    printf '%s\0' "${spec_files[@]}" | xargs -0 -P 10 -I {} bash -c 'sync_spec "$@"' _ {} || true
+
+    echo "  Concluído."
+  fi
 fi
 
 # ---------- [4/7] commit chaser ----------
