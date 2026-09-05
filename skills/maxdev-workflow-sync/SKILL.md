@@ -38,7 +38,10 @@ maxsyncai-opencode-skills/              ← repo do package (raiz)
         │   ├── AGENTS.md               ← canônico (template com placeholders)
         │   ├── dev-workflow.md         ← canônico (template)
         │   ├── pre-commit-config.yaml  ← canônico (governança block-main/push)
-        │   ├── scripts/close-change.sh ← canônico (copia como-is)
+        │   ├── scripts/close-change.sh ← canônico (copia como-is; desde v1.3.4
+        │   │                               valida Open Questions do design.md
+        │   │                               antes do archive — opt-out via
+        │   │                               --skip-open-questions)
         │   ├── scripts/push-safe.sh    ← canônico (copia como-is)
         │   ├── scripts/update-canvas.sh ← canônico (copia como-is) — regenera Knowledge Graph
         │   ├── scripts/update_canvas.py ← canônico (copia como-is) — gerador JSON Canvas
@@ -244,6 +247,11 @@ A skill **não assume** estrutura fixa do openspec upstream:
 - Para changes de layout do openspec upstream, rode `/maxdev-workflow-sync --check` para detectar e adaptar
 
 ## Changelog
+
+### v1.3.4 — Validação de Open Questions no closeout
+
+- **close-change.sh**: Step 1/7 agora valida que o `design.md` não tem `## Open Questions` em aberto (seção ausente → aborta; status `open`/`aberta` → aborta listando; placeholder "Nenhuma em aberto" → passa). Opt-out: `--skip-open-questions`. Impede que dívida técnica não resolvida seja arquivada em silêncio. Parser tolerante aos formatos tabela e bullet-list.
+- **workflow.version**: Bumped to 1.3.4.
 
 ### v1.3.3 — Canvas removido, grafo nativo, validações fail-fast
 

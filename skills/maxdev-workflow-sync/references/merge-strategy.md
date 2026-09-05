@@ -18,6 +18,12 @@ Detalhes da estratégia **dry-run + diff** adotada pela skill.
 | Tipo | Estratégia | Justificativa |
 |---|---|---|
 | `scripts/close-change.sh`, `scripts/push-safe.sh` | Sobrescreve | Scripts canônicos — não há motivo para customização por projeto |
+
+> **Nota (v1.3.4+):** `scripts/close-change.sh` **sobrescreve** de forma
+> canônica, então a validação de Open Questions (adicionada em v1.3.4) é
+> herdada por todo projeto adotante no próximo sync. Projetos que precisam de
+> comportamento *adicional* no closeout devem usar o hook `--validate-hooks` —
+> nunca editar o script canônico localmente, sob risco de sobrescrita.
 | `openspec/templates/*.md` | Sobrescreve | Templates reference — idem |
 | `openspec/config.yaml` | Dry-run + diff + confirm | Contém context específico do projeto (placeholders). A skill sobrescreve se drift detectado — o usuário revisa o diff antes |
 | `AGENTS.md`, `dev-workflow.md` | Dry-run + diff + confirm | Mesma razão. Se o projeto tem customizações (ex.: seções extras), o usuário pode rejeitar a atualização e fazer merge manual |

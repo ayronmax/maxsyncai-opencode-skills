@@ -351,8 +351,9 @@ limpa branches penduradas após o merge.
    ```
    O script roda 5 steps idempotentes:
    - **[1/7]** valida auditoria (tasks 100% `[x]`, `openspec validate`/`doctor`
-     verdes, working tree limpa, `main` sincronizada, PR merged, nota no
-     Basic Memory)
+      verdes, working tree limpa, `main` sincronizada, PR merged, nota no
+      Basic Memory, e — v1.3.4+ — **Open Questions do `design.md` resolvidas
+      ou sem pendências**; opt-out via `--skip-open-questions`)
    - **[2/7]** marca `N.8` (GATE 3) e `N.9` (opsx-archive-change) como `[x]` em `tasks.md`
    - **[3/7]** roda `openspec archive <change>` (mergea deltas em
      `openspec/specs/`, move a change para `openspec/changes/archive/`)
@@ -379,6 +380,13 @@ novamente:
 Ele marca as tasks como `[x]` e abre PR admin
 (`chore/admin-closeout-<change>`) — **não re-move** nem duplica archive.
 Justificativa: correção de livro-razão, não regressão.
+
+### Open Questions antes do archive (v1.3.4+)
+
+O `close-change.sh` aborta o closeout se o `design.md` tiver `## Open Questions`
+com qualquer `Status` aberto. Resolva-as no `design.md` **ou** mova a dívida
+para o Basic Memory (seção "Dívidas futuras" na nota `Decisões Técnicas — <change>`)
+antes de rodar o closeout. Opt-out pontual: `--skip-open-questions`.
 
 ### Registro de decisão no Basic Memory
 
