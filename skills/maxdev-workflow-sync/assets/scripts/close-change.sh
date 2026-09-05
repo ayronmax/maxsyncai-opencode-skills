@@ -12,7 +12,8 @@
 #
 # O que faz (modo padrão, 6 steps, idempotente):
 #   [1/7] Valida auditoria antes de mover (tasks 100% [x], openspec(validate|doctor),
-#         git limpo e sincronizado, PR merged, nota no Basic Memory).
+#         git limpo e sincronizado, PR merged, nota no Basic Memory, e Open
+#         Questions do design.md resolvidas — default ON).
 #   [2/7] Marca N.8 (GATE 4) e N.9 (opsx-archive-change) como [x] em tasks.md.
 #   [3/7] Roda `openspec archive <change>` (mergeea deltas e move para archive/).
 #   [3.5] Cria/atualiza spec mirror notes no Basic Memory via basic-memory tool write-note.
@@ -40,6 +41,7 @@
 #   --skip-spec-mirror-check      Pula validação de spec mirrors no BM DB
 #   --skip-decision-note-check    Pula validação de decision notes
 #   --skip-index-check            Pula validação do índice do projeto
+#   --skip-open-questions         Pula validação de Open Questions no design.md
 #
 # Saída: exit 0 = ok; exit != 0 = abortou com mensagem.
 #
@@ -58,6 +60,7 @@ MIN_CONTENT_LINES=10
 SKIP_SPEC_MIRROR_CHECK=false
 SKIP_DECISION_NOTE_CHECK=false
 SKIP_INDEX_CHECK=false
+SKIP_OPEN_QUESTIONS_CHECK=false
 POST_MERGE=false
 
 while [[ $# -gt 0 ]]; do
@@ -94,6 +97,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_INDEX_CHECK=true
       shift
       ;;
+    --skip-open-questions)
+      SKIP_OPEN_QUESTIONS_CHECK=true
+      shift
+      ;;
     -h|--help)
       echo "Uso:"
       echo "  $0 <change-name>                    # fluxo padrão (steps 1-5)"
@@ -107,6 +114,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --skip-spec-mirror-check            Pula validação spec mirrors no BM DB"
       echo "  --skip-decision-note-check          Pula validação decision notes"
       echo "  --skip-index-check                  Pula validação índice do projeto"
+      echo "  --skip-open-questions               Pula validação de Open Questions no design.md"
       exit 0
       ;;
     --)
@@ -155,6 +163,71 @@ NOTE_FILE="memories/${NOTE_TITLE}.md"
 
 step() { echo -e "\n[$1] $2"; }
 abort() { echo "✗ $*"; exit 1; }
+
+# ---------- validação de Open Questions ----------
+#
+# Detecta Open Questions ainda abertas no `## Open Questions` do design.md.
+# Tolerante a dois formatos em circulação:
+#   (a) tabela:  `| Q | Owner | Spike/Research | Status | Resolvido em |`
+#                com status aberto na 4ª coluna (Q→1, Owner→2, Spike→3, Status→4).
+#   (b) bullet:  `- **Q1**: ... | Status: open | ...`
+#
+# Regras: seção ausente → aborta; placeholder "Nenhuma em aberto" → passa;
+# qualquer status aberto (open/aberta/em aberto/a ser/a resolver) → aborta listando.
+
+validate_open_questions() {
+  local design_file="$1"
+
+  [[ -f "$design_file" ]] || return 0
+
+  if ! grep -qE '^##+ Open Questions' "$design_file"; then
+    echo "  ✗ design.md sem seção '## Open Questions' (obrigatória). Adicione-a antes do closeout."
+    return 1
+  fi
+
+  if grep -qiE 'nenhuma em aberto|no open questions|none open' "$design_file"; then
+    echo "  ✓ Open Questions: sem pendências declaradas."
+    return 0
+  fi
+
+  local section
+  section=$(awk '/^##+ Open Questions/{f=1; next} /^##+ /{if(f) exit} f' "$design_file")
+
+  local open_lines=()
+  local status_cell
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    if [[ "$line" =~ ^[[:space:]]*\|?[[:space:]]*(Q|Owner|Spike|Resolvido) ]]; then
+      continue
+    fi
+    if [[ "$line" =~ ^[[:space:]]*\|?[[:space:]]*[-:]{3,} ]]; then
+      continue
+    fi
+    if [[ "$line" =~ ^[[:space:]]*\| ]]; then
+      status_cell=$(echo "$line" | awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $5); print $5}')
+      if echo "$status_cell" | grep -qiE 'open|aberta|em aberto|a ser|a resolver'; then
+        open_lines+=("$line")
+        continue
+      fi
+    fi
+    if echo "$line" | grep -qiE 'Status[[:space:]]*:[[:space:]]*(open|aberta|em aberto|a ser|a resolver)'; then
+      open_lines+=("$line")
+    fi
+  done <<< "$section"
+
+  if [[ ${#open_lines[@]} -gt 0 ]]; then
+    echo "  ✗ Open Questions ainda abertas no design.md:"
+    for l in "${open_lines[@]}"; do
+      echo "      $l"
+    done
+    echo "  Resolva-as no design.md OU mova a dívida para o Basic Memory antes do closeout."
+    echo "  (Opt-out se necessário: $0 --skip-open-questions $CHANGE)"
+    return 1
+  fi
+
+  echo "  ✓ Open Questions: resolvidas."
+  return 0
+}
 
 if [[ "$POST_MERGE" == "true" ]]; then
   CHASER="chore/archive-$CHANGE"
@@ -262,6 +335,14 @@ fi
 if [[ -n "$VALIDATE_HOOKS" && -f "$VALIDATE_HOOKS" ]]; then
   echo "  Executando validação customizada: $VALIDATE_HOOKS"
   bash "$VALIDATE_HOOKS" "$CHANGE" "$ACTIVE" "$ARCHIVED" || abort "Validação customizada falhou"
+fi
+
+# Open Questions do design.md: não arquivar dívida técnica em silêncio.
+# Default ON (opt-out: --skip-open-questions). Em modo admin (change já
+# arquivada), não bloqueia — é correção de livro-razão, não nova auditoria.
+if [[ "$SKIP_OPEN_QUESTIONS_CHECK" == "false" && "$ADMIN_MODE" == "false" ]]; then
+  step "1/7" "Validando Open Questions do design.md..."
+  validate_open_questions "$ACTIVE/design.md" || abort "Open Questions não resolvidas (use --skip-open-questions para pular)"
 fi
 
 # ---------- [1/7] validações extras: spec mirrors + decision notes + wikilinks ----------
