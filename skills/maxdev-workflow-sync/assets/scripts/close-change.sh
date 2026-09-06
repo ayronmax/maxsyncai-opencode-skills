@@ -348,14 +348,22 @@ fi
 # ---------- [1/7] validações extras: spec mirrors + decision notes + wikilinks ----------
 # Estas validações podem ser desabilitadas via flags
 
-# Spec mirror check
+# Spec mirror check (otimizado: 1 chamada em vez de N chamadas sequenciais)
 if [[ "$SKIP_SPEC_MIRROR_CHECK" == "false" && -d "openspec/specs" ]]; then
-  step "1/7" "Validando spec mirrors no Basic Memory DB..."
+  step "1/7" "Validando spec mirrors no Basic Memory DB (1 chamada)..."
   SPEC_COUNT=$(find "openspec/specs" -name "spec.md" -type f | wc -l)
+
+  # Busca todas as specs tipo 'spec' numa única chamada (~10s em vez de N*10s).
+  # Custo dominante é o startup da CLI, não o volume de resultados.
+  BM_SPECS_JSON=$(basic-memory tool search-notes --type spec --page-size 40 2>/dev/null || echo "{}")
+  if ! echo "$BM_SPECS_JSON" | jq -e '.results' >/dev/null 2>&1; then
+    abort "Falha ao consultar spec mirrors no Basic Memory DB. Rode sync antes do closeout."
+  fi
+
   for spec_dir in openspec/specs/*/; do
     spec_name=$(basename "$spec_dir")
     spec_title="Spec — $spec_name"
-    if ! basic-memory tool search-notes --title "$spec_title" --type spec --page-size 1 2>/dev/null | jq -e '.results[0]' >/dev/null; then
+    if ! echo "$BM_SPECS_JSON" | jq -e --arg t "$spec_title" '.results[] | select(.title == $t)' >/dev/null 2>&1; then
       abort "Spec mirror '$spec_title' não encontrado no Basic Memory DB. Rode sync antes do closeout."
     fi
   done
@@ -523,30 +531,15 @@ _sync_specs_bash() {
     local project_lower="${PROJECT_NAME_LOWER:-$PROJECT_LOWER}"
 
     for attempt in 1 2 3; do
-      if basic-memory write_note \
+      if basic-memory tool write-note \
         --title "$spec_title" \
         --content "$spec_content" \
         --type spec \
         --tags "spec,$project_lower,$spec_name" \
-        --metadata "{\"source\": \"$spec_file\"}" \
         --overwrite \
-        --directory "/" \
+        --folder "/" \
         >/dev/null 2>&1; then
         echo "  ✓ $spec_title"
-        return 0
-      fi
-
-      local file_path="Spec — $spec_name.md"
-      if basic-memory tool write_note \
-        --title "$spec_title" \
-        --content "$spec_content" \
-        --type spec \
-        --tags "spec,$project_lower,$spec_name" \
-        --metadata "{\"source\": \"$spec_file\"}" \
-        --overwrite \
-        --directory "/" \
-        >/dev/null 2>&1; then
-        echo "  ✓ $spec_title (atualizado)"
         return 0
       fi
 
