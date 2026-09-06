@@ -112,4 +112,19 @@ Detalhes completos em `dev-workflow.md §6` (archive e Basic Memory).
 - `openspec/config.yaml` — contexto do projeto + rules de artefatos.
 - `.pre-commit-config.yaml` — hooks `block-main` (pre-commit) e `block-main-push` (pre-push).
 - `.gitignore` — seção delimitada entre markers `# >>> maxdev-workflow-sync >>>` / `# <<< maxdev-workflow-sync <<<` é re-syncada. Custom acima/abaixo preservado.
+
+## Customizações via override local (EXTERNAL_OVERRIDES)
+
+Customizações project-specific (gates, scripts, convenções) residem num diretório
+local **fora do repo da skill** e são versionadas pelo próprio projeto. Para usar:
+
+```bash
+EXTERNAL_OVERRIDES=/path/para/dir-local <skill_dir>/scripts/sync-workflow.sh --apply
+```
+
+- O diretório aceita os 9 canônicos + starters (+ opcional `workflow.version`).
+- Em `--apply`, canônicos existentes no override são copiados **do override**
+  (não do asset genérico) — protege customizações do clobber.
+- `workflow.version` no override define a versão do workflow (precedência sobre assets).
+- Detalhes em `dev-workflow.md` e no SKILL.md da skill.
 - `.editorconfig` — UTF-8/LF/indent 4-Python-2-TS.
