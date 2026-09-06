@@ -544,3 +544,36 @@ ao agente para ler o brief e apontar ambiguidades **antes** de iniciar
 |---|---|---|
 | `make test-backend-fast` | ~10 min | Desenvolvimento diário (unitários paralelos + integração sequencial) |
 | `make test-backend` | ~10 min | CI / pre-commit (sequencial, determinístico) |
+
+---
+
+## 12. Customizações via override local (EXTERNAL_OVERRIDES)
+
+Customizações project-specific do workflow (gates, scripts, convenções) NÃO
+devem ser editadas no cache do package (perdidas no re-install). O mecanismo
+oficial é um **override local versionado pelo projeto**:
+
+### Como funciona
+
+```bash
+# dry-run: EXTERNAL_OVERRIDES=/path bash <skill_dir>/scripts/sync-workflow.sh
+# aplicar: EXTERNAL_OVERRIDES=/path bash <skill_dir>/scripts/sync-workflow.sh --apply
+```
+
+| Item | Comportamento |
+|---|---|
+| Canônicos no override | Copiados **do override** em `--apply` (protege customizações do clobber) |
+| Starters no override | Tratados como starters (ADD se inexistente; MODIFY só com `--force`) |
+| `workflow.version` | Define a versão do workflow (precedência sobre `assets/workflow.version`) |
+| Arquivos ausentes no override | Caem para o asset genérico da skill (default) |
+
+### Boas práticas
+
+1. Crie um diretório de override versionado (ex.: `~/.meu-template/`) com os
+   canônicos que você customiza (AGENTS.md, dev-workflow.md, close-change.sh,
+   config.yaml, etc.) + `workflow.version`.
+2. Rode sempre o sync com `EXTERNAL_OVERRIDES` setado — assim `--apply` é seguro.
+3. Quando uma melhoria genérica for descoberta no seu projeto, **devolva ao
+   upstream via PR** (repo da skill) — reduz fork futuro. Depois do merge,
+   remova do override o que virou igual ao upstream (o override encolhe).
+4. Para ver drift sem aplicar: `--check` (read-only) com o mesmo env var.
