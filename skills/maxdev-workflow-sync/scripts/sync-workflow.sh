@@ -585,7 +585,9 @@ if [[ "$OPT_DERIVABLE_PLACEHOLDERS" == "true" ]]; then
   echo "  ℹ {{PROJECT_NAME}} → $AUTO_PROJECT_NAME"
   echo "  ℹ {{PROJECT_NAME_UPPER}} → $AUTO_PROJECT_NAME_UPPER"
   echo "  ℹ {{PROJECT_ABSOLUTE_PATH}} → $AUTO_PROJECT_PATH"
-  for f in "${VERSIONED_TEMPLATES[@]}" "openspec/config.yaml" "AGENTS.md"; do
+  # Varre TODOS os canônicos + VERSIONED_TEMPLATES — evita {{PROJECT_NAME}}
+  # preso em arquivos canônicos fora do VERSIONED_TEMPLATES (ex: dev-workflow.md).
+  for f in "${!CANON[@]}" "${VERSIONED_TEMPLATES[@]}"; do
     full="$PROJECT_ROOT/$f"
     [[ -f "$full" ]] || continue
     if grep -q -F '{{PROJECT_NAME}}' "$full"; then
